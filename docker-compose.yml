@@ -1,0 +1,9 @@
+services:
+  museum-display:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount artifacts directory so uploads persist outside the container
+      - ./public/artifacts:/app/public/artifacts
+    restart: unless-stopped

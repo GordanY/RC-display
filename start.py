@@ -328,14 +328,25 @@ def open_browser():
 # Main
 # ---------------------------------------------------------------------------
 def main():
+    docker_mode = "--docker" in sys.argv
+
     print()
     print("=" * 60)
     print("  Museum OLED Display - Starting...")
     print("=" * 60)
     print()
 
-    ensure_venv_and_flask()
-    check_prerequisites()
+    if not docker_mode:
+        # Local mode: handle venv, npm, etc.
+        ensure_venv_and_flask()
+        check_prerequisites()
+    else:
+        # Docker mode: just check data file exists
+        if not DATA_FILE.exists():
+            print("[warning] data.json not found, creating empty one...")
+            ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+            with open(DATA_FILE, "w", encoding="utf-8") as f:
+                json.dump({"artifacts": []}, f)
 
     app = create_app()
 
@@ -349,8 +360,9 @@ def main():
     print("=" * 60)
     print()
 
-    # Open browser in a background thread
-    threading.Thread(target=open_browser, daemon=True).start()
+    if not docker_mode:
+        # Open browser in a background thread (not in Docker)
+        threading.Thread(target=open_browser, daemon=True).start()
 
     # Start Flask server
     app.run(host=HOST, port=PORT, debug=False)
