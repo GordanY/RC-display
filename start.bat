@@ -100,25 +100,52 @@ if exist "%PROGRAMFILES%\nodejs\npm.cmd" (
     goto :node_ok
 )
 
-:: Install Node.js
-echo       [!!] Not found. Installing via winget...
-where winget >nul 2>nul
-if %ERRORLEVEL% neq 0 goto :fail_node
-winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
-if %ERRORLEVEL% neq 0 goto :fail_node
+:: Install Node.js - try winget first, then direct download
+echo       [!!] Not found. Installing...
 
-:: Add to PATH for this session
+:: Try winget
+where winget >nul 2>nul
+if %ERRORLEVEL% neq 0 goto :try_download_node
+winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements >nul 2>nul
 if exist "%PROGRAMFILES%\nodejs\npm.cmd" (
     set "PATH=%PROGRAMFILES%\nodejs;%PATH%"
-    echo       [ok] Installed at %PROGRAMFILES%\nodejs\
+    echo       [ok] Installed via winget.
+    goto :node_ok
+)
+
+:try_download_node
+:: Download Node.js portable via PowerShell
+echo       [setup] Downloading Node.js...
+set "NODE_DIR=%~dp0.node"
+set "NODE_URL=https://nodejs.org/dist/v20.18.3/node-v20.18.3-win-x64.zip"
+set "NODE_ZIP=%TEMP%\node.zip"
+
+powershell -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '%NODE_URL%' -OutFile '%NODE_ZIP%' -UseBasicParsing; Write-Host 'DOWNLOAD_OK' } catch { Write-Host 'DOWNLOAD_FAIL' }" 2>nul | findstr "DOWNLOAD_OK" >nul
+if %ERRORLEVEL% neq 0 (
+    echo       [error] Download failed.
+    goto :fail_node
+)
+
+echo       [setup] Extracting...
+powershell -Command "try { Expand-Archive -Path '%NODE_ZIP%' -DestinationPath '%NODE_DIR%' -Force; Write-Host 'EXTRACT_OK' } catch { Write-Host 'EXTRACT_FAIL' }" 2>nul | findstr "EXTRACT_OK" >nul
+if %ERRORLEVEL% neq 0 (
+    echo       [error] Extract failed.
+    goto :fail_node
+)
+del "%NODE_ZIP%" >nul 2>nul
+
+:: Find extracted folder and add to PATH
+for /d %%D in ("%NODE_DIR%\node-*") do (
+    set "PATH=%%D;%PATH%"
+    echo       [ok] Node.js ready at %%D
     goto :node_ok
 )
 goto :fail_node
 
 :fail_node
 echo.
-echo   ERROR: Cannot find or install Node.js.
-echo   Install manually from https://nodejs.org/
+echo   ERROR: Cannot install Node.js automatically.
+echo   Please install manually from https://nodejs.org/
 echo.
 pause
 exit /b 1
