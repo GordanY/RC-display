@@ -5,6 +5,9 @@ import { useLanguage } from '../context/LanguageContext';
 import ArtifactTabs from './ArtifactTabs';
 import CreationPills from './CreationPills';
 import InfoView from './InfoView';
+import ModelView from './ModelView';
+import ComparisonView from './ComparisonView';
+import VideoView from './VideoView';
 import type { ContentView } from '../types';
 
 export default function KioskLayout() {
@@ -84,13 +87,22 @@ export default function KioskLayout() {
               artifact={activeArtifact}
               onViewChange={setContentView}
             />
+          ) : contentView === 'model' && activeCreation.model ? (
+            <ModelView modelPath={activeCreation.model} onClose={() => setContentView('info')} />
+          ) : contentView === 'comparison' ? (
+            <ComparisonView
+              originalPhoto={activeArtifact.originalPhoto}
+              creationPhoto={activeCreation.photos[0] ?? ''}
+              onClose={() => setContentView('info')}
+            />
+          ) : contentView === 'video' && activeCreation.video ? (
+            <VideoView videoPath={activeCreation.video} onClose={() => setContentView('info')} />
           ) : (
-            <div className="text-gray-500 flex items-center justify-center h-full">
-              <div className="text-center">
-                <p className="text-lg">{contentView} view</p>
-                <button onClick={() => setContentView('info')} className="text-gold mt-2 min-h-[44px]">&larr; Back to Info</button>
-              </div>
-            </div>
+            <InfoView
+              creation={activeCreation}
+              artifact={activeArtifact}
+              onViewChange={setContentView}
+            />
           )
         ) : (
           <div className="text-gray-500">No creation selected</div>
