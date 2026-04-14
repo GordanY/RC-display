@@ -15,8 +15,8 @@ export async function saveData(data: unknown) {
 
 export async function uploadFile(file: File, destPath: string): Promise<string> {
   const form = new FormData();
-  form.append('file', file);
   form.append('path', destPath);
+  form.append('file', file);
   const res = await fetch(`${BASE}/upload`, { method: 'POST', body: form });
   const json = await res.json();
   return json.path;
