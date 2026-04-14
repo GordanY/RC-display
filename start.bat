@@ -158,7 +158,7 @@ if exist "%PROGRAMFILES%\nodejs\npm.cmd" (
 :: Extract bundled Node.js from tools/
 call :LOG "      [--] Not found. Extracting bundled Node.js..."
 set "NODE_DIR=%~dp0.node"
-set "NODE_ZIP=%~dp0tools\node-v20.18.3-win-x64.zip"
+set "NODE_ZIP=%~dp0tools\node-v20.20.2-win-x64.zip"
 
 :: Check if already extracted
 for /d %%D in ("%NODE_DIR%\node-*") do (
@@ -191,7 +191,7 @@ goto :fail_node
 :fail_node
 call :LOG ""
 call :LOG "  ERROR: Cannot set up Node.js."
-call :LOG "  Make sure tools\node-v20.18.3-win-x64.zip exists."
+call :LOG "  Make sure tools\node-v20.20.2-win-x64.zip exists."
 call :LOG "  See log: %LOG_FILE%"
 call :LOG ""
 pause

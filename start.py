@@ -267,18 +267,38 @@ def ensure_frontend_built():
     # On Windows, npm is a .cmd script and needs shell=True
     use_shell = os.name == "nt"
 
-    # npm install
-    node_modules = BASE_DIR / "node_modules"
-    if not node_modules.exists():
-        log.info("[build] Running npm install...")
-        subprocess.check_call(["npm", "install"], cwd=str(BASE_DIR), shell=use_shell)
-        log.info("[build] npm install complete.")
-    else:
-        log.info("[build] node_modules/ exists, skipping npm install.")
+    # npm install (always run to ensure platform-correct binaries)
+    log.info("[build] Running npm install...")
+    result = subprocess.run(
+        ["npm", "install"], cwd=str(BASE_DIR), shell=use_shell,
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        log.error("[build] npm install failed!")
+        if result.stdout:
+            for line in result.stdout.strip().splitlines():
+                log.error(f"  {line}")
+        if result.stderr:
+            for line in result.stderr.strip().splitlines():
+                log.error(f"  {line}")
+        pause_and_exit(1)
+    log.info("[build] npm install complete.")
 
     # npm run build
     log.info("[build] Running npm run build...")
-    subprocess.check_call(["npm", "run", "build"], cwd=str(BASE_DIR), shell=use_shell)
+    result = subprocess.run(
+        ["npm", "run", "build"], cwd=str(BASE_DIR), shell=use_shell,
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        log.error("[build] npm run build failed!")
+        if result.stdout:
+            for line in result.stdout.strip().splitlines():
+                log.error(f"  {line}")
+        if result.stderr:
+            for line in result.stderr.strip().splitlines():
+                log.error(f"  {line}")
+        pause_and_exit(1)
     log.info("[build] Frontend built successfully.")
     log.info("")
 
