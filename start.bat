@@ -6,65 +6,54 @@ echo   Museum OLED Display - Setup
 echo ============================================================
 echo.
 
-:: Check for Python
-where python >nul 2>nul
-if %ERRORLEVEL% == 0 goto :run
+:: Try "py" launcher first - most reliable on Windows
+:: (never confused with the Windows Store stub)
+py -3 --version >nul 2>nul
+if %ERRORLEVEL% == 0 (
+    echo [ok] Python found via py launcher.
+    echo [ok] Running start.py ...
+    echo.
+    py -3 "%~dp0start.py" 2>&1
+    echo.
+    echo [info] start.py exited with code: %ERRORLEVEL%
+    echo.
+    pause
+    goto :eof
+)
 
-where python3 >nul 2>nul
-if %ERRORLEVEL% == 0 goto :run_python3
+:: Try "python" but verify it ACTUALLY runs (not just the Store stub)
+:: The Store stub returns 9009 when you try to run a real script
+python -c "import sys; sys.exit(0)" >nul 2>nul
+if %ERRORLEVEL% == 0 (
+    echo [ok] Python found.
+    echo [ok] Running start.py ...
+    echo.
+    python "%~dp0start.py" 2>&1
+    echo.
+    echo [info] start.py exited with code: %ERRORLEVEL%
+    echo.
+    pause
+    goto :eof
+)
 
-:: Python not found - try to install
-echo [setup] Python not found. Attempting to install...
-echo.
-
-where winget >nul 2>nul
-if %ERRORLEVEL% neq 0 goto :no_winget
-
-echo [setup] Installing Python via winget...
-winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements
-if %ERRORLEVEL% neq 0 goto :install_failed
-
-echo.
-echo [setup] Python installed successfully.
-echo [setup] Please CLOSE this window and double-click start.bat again.
-echo.
-pause
-exit /b 0
-
-:no_winget
-:install_failed
+:: Nothing works - Python is not really installed
 echo.
 echo ============================================================
-echo   Python is not installed and could not be auto-installed.
+echo   Python is NOT installed (or only the Microsoft Store
+echo   stub exists, which does not work).
 echo.
-echo   Please install Python manually:
-echo     1. Go to https://www.python.org/downloads/
-echo     2. Download and install Python 3.12+
-echo     3. IMPORTANT: Check "Add Python to PATH" during install
-echo     4. Re-run this script
+echo   To fix this:
+echo.
+echo   1. Go to https://www.python.org/downloads/
+echo   2. Click "Download Python 3.12"
+echo   3. Run the installer
+echo   4. CHECK THE BOX: "Add Python to PATH" (at the bottom!)
+echo   5. Click "Install Now"
+echo   6. At the end, click "Disable path length limit"
+echo   7. Close this window and double-click start.bat again
+echo.
+echo   Do NOT use the Microsoft Store version of Python.
 echo ============================================================
 echo.
 pause
 exit /b 1
-
-:run
-echo [ok] Python found.
-echo [ok] Running start.py ...
-echo.
-python "%~dp0start.py" 2>&1
-echo.
-echo [info] start.py exited with code: %ERRORLEVEL%
-echo.
-pause
-goto :eof
-
-:run_python3
-echo [ok] Python3 found.
-echo [ok] Running start.py ...
-echo.
-python3 "%~dp0start.py" 2>&1
-echo.
-echo [info] start.py exited with code: %ERRORLEVEL%
-echo.
-pause
-goto :eof
