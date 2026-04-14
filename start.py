@@ -30,6 +30,14 @@ ARTIFACTS_DIR = BASE_DIR / "public" / "artifacts"
 DATA_FILE = ARTIFACTS_DIR / "data.json"
 VENV_DIR = BASE_DIR / ".venv"
 
+
+def pause_and_exit(code=1):
+    """Pause so the user can read the message before the terminal closes."""
+    print()
+    input("Press Enter to exit...")
+    sys.exit(code)
+
+
 # ---------------------------------------------------------------------------
 # Auto-create venv and install Flask if needed
 # ---------------------------------------------------------------------------
@@ -86,7 +94,7 @@ def check_prerequisites():
         print()
         print("Then copy the entire project folder to this PC.")
         print("=" * 60)
-        sys.exit(1)
+        pause_and_exit(1)
 
     if not DATA_FILE.exists():
         print("=" * 60)
@@ -95,7 +103,7 @@ def check_prerequisites():
         print("Make sure the 'public/artifacts/' directory exists")
         print("with at least a data.json file.")
         print("=" * 60)
-        sys.exit(1)
+        pause_and_exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -238,4 +246,15 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n[server] Stopped.")
+    except Exception as e:
+        print()
+        print("=" * 60)
+        print(f"ERROR: {e}")
+        print("=" * 60)
+        import traceback
+        traceback.print_exc()
+        pause_and_exit(1)
