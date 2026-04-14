@@ -11,7 +11,7 @@ Currently, two official plugins are available:
 
 ### One-Click Production Server
 
-The launcher script automatically installs dependencies (Python, Flask, Node.js), builds the frontend, and starts a Flask server on port **8080**. No manual setup required.
+The launcher script automatically checks and installs all dependencies (Python, Flask, Node.js), builds the frontend, and starts a Flask server on port **8080**. No manual setup required — works on a completely fresh PC.
 
 #### Mac / Linux
 
@@ -30,10 +30,15 @@ start.bat
 
 #### What it does
 
-1. Finds (or installs) Python 3 and Node.js
-2. Creates a Python virtual environment (`.venv/`) and installs Flask
-3. Runs `npm install` and `npm run build` if `dist/` doesn't exist yet
-4. Starts a Flask server serving the built frontend
+1. Finds (or installs) Python 3 — tries PATH, common install locations, winget, and direct download from python.org
+2. Finds (or extracts) Node.js — tries PATH or extracts the bundled zip from `tools/`
+3. Creates a Python virtual environment (`.venv/`) and installs Flask
+4. Runs `npm install` and `npm run build` if `dist/` doesn't exist yet
+5. Displays a pre-flight check summary of all dependencies
+6. Starts a Flask server serving the built frontend
+7. Auto-opens the browser to `http://localhost:8080`
+
+All output is logged to `logs/start_YYYYMMDD_HHMMSS.log` for troubleshooting. The last 10 log files are kept automatically.
 
 #### URLs
 

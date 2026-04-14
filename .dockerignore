@@ -1,7 +1,0 @@
-node_modules/
-dist/
-.venv/
-.superpowers/
-.git/
-.playwright-mcp/
-*.log

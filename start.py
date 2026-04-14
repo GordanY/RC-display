@@ -6,6 +6,7 @@ Museum OLED Display - One-Click Launcher
 Run this script to start the museum display application.
 
     python start.py
+    python start.py --log-file logs/start.log
 
 On first run, it will create a virtual environment and install Flask.
 """
@@ -22,26 +23,99 @@ if os.name == "nt":
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
+
+import argparse
 import json
+import logging
 import shutil
 import webbrowser
 import threading
+from datetime import datetime
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 PORT = 8080
-HOST = "0.0.0.0"
+HOST = "127.0.0.1"
 BASE_DIR = Path(__file__).resolve().parent
 DIST_DIR = BASE_DIR / "dist"
 ARTIFACTS_DIR = BASE_DIR / "public" / "artifacts"
 DATA_FILE = ARTIFACTS_DIR / "data.json"
 VENV_DIR = BASE_DIR / ".venv"
 
+# Module-level logger and log file path
+log = logging.getLogger("museum")
+LOG_FILE_PATH = None
+
+
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+def parse_args():
+    parser = argparse.ArgumentParser(description="Museum OLED Display Launcher")
+    parser.add_argument(
+        "--log-file",
+        type=str,
+        default=None,
+        help="Path to log file (created by start.bat/start.sh)",
+    )
+    return parser.parse_args()
+
+
+# ---------------------------------------------------------------------------
+# Logging setup
+# ---------------------------------------------------------------------------
+def setup_logging(log_path=None):
+    """Configure dual logging: console (clean) + file (timestamped)."""
+    global LOG_FILE_PATH
+
+    if log_path is None:
+        logs_dir = BASE_DIR / "logs"
+        logs_dir.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_path = logs_dir / f"start_{timestamp}.log"
+
+    log_path = Path(log_path)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    LOG_FILE_PATH = log_path
+
+    log.setLevel(logging.DEBUG)
+
+    # Console handler — clean output matching existing style
+    console = logging.StreamHandler(sys.stdout)
+    console.setLevel(logging.INFO)
+    console.setFormatter(logging.Formatter("%(message)s"))
+    log.addHandler(console)
+
+    # File handler — append mode (start.bat may have already written to this file)
+    fh = logging.FileHandler(str(log_path), mode="a", encoding="utf-8")
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+    log.addHandler(fh)
+
+    log.info(f"[log] Logging to: {log_path}")
+
+    # Clean up old log files (keep last 10)
+    cleanup_old_logs(log_path.parent)
+
+    return log_path
+
+
+def cleanup_old_logs(logs_dir):
+    """Keep only the 10 most recent log files."""
+    log_files = sorted(logs_dir.glob("start_*.log"))
+    for old_file in log_files[:-10]:
+        try:
+            old_file.unlink()
+        except OSError:
+            pass
+
 
 def pause_and_exit(code=1):
     """Pause so the user can read the message before the terminal closes."""
+    if LOG_FILE_PATH:
+        print(f"\n  See log: {LOG_FILE_PATH}")
     print()
     input("Press Enter to exit...")
     sys.exit(code)
@@ -52,8 +126,8 @@ def pause_and_exit(code=1):
 # ---------------------------------------------------------------------------
 def ensure_venv_and_flask():
     """Create a virtual environment, install Flask, and re-launch if needed."""
-    print(f"[debug] Python: {sys.executable}")
-    print(f"[debug] Project: {BASE_DIR}")
+    log.debug(f"Python: {sys.executable}")
+    log.debug(f"Project: {BASE_DIR}")
 
     if os.name == "nt":
         venv_python = VENV_DIR / "Scripts" / "python.exe"
@@ -62,25 +136,25 @@ def ensure_venv_and_flask():
 
     # If we're already running inside the venv, just return
     if VENV_DIR.exists() and Path(sys.executable).resolve() == venv_python.resolve():
-        print("[setup] Already in virtual environment.")
+        log.info("[setup] Already in virtual environment.")
         return
 
     # Create venv if it doesn't exist
     if not VENV_DIR.exists():
-        print("[setup] Creating virtual environment...")
+        log.info("[setup] Creating virtual environment...")
         subprocess.check_call([sys.executable, "-m", "venv", str(VENV_DIR)])
-        print("[setup] Virtual environment created at .venv/")
+        log.info("[setup] Virtual environment created at .venv/")
     else:
-        print("[setup] Virtual environment exists.")
+        log.info("[setup] Virtual environment exists.")
 
     # Verify venv python exists
     if not venv_python.exists():
-        print(f"[error] venv Python not found at: {venv_python}")
-        print("[error] Deleting broken venv and retrying...")
+        log.error(f"[error] venv Python not found at: {venv_python}")
+        log.info("[setup] Deleting broken venv and retrying...")
         shutil.rmtree(VENV_DIR, ignore_errors=True)
         subprocess.check_call([sys.executable, "-m", "venv", str(VENV_DIR)])
         if not venv_python.exists():
-            print(f"[error] Still not found. Python may not support venv.")
+            log.error("[error] Still not found. Python may not support venv.")
             pause_and_exit(1)
 
     # Install Flask if not present in the venv
@@ -89,22 +163,24 @@ def ensure_venv_and_flask():
         capture_output=True,
     )
     if result.returncode != 0:
-        print("[setup] Installing Flask...")
+        log.info("[setup] Installing Flask...")
         if os.name == "nt":
             pip = VENV_DIR / "Scripts" / "pip.exe"
         else:
             pip = VENV_DIR / "bin" / "pip3"
         subprocess.check_call([str(pip), "install", "flask"])
-        print("[setup] Flask installed successfully.")
+        log.info("[setup] Flask installed successfully.")
     else:
-        print("[setup] Flask already installed.")
+        log.info("[setup] Flask already installed.")
 
     # Re-launch this script under the venv python
-    print(f"[setup] Re-launching with: {venv_python}")
-    ret = subprocess.call([str(venv_python), __file__] + sys.argv[1:])
+    log.info(f"[setup] Re-launching with: {venv_python}")
+    relaunch_args = [str(venv_python), __file__] + sys.argv[1:]
+    if "--log-file" not in sys.argv and LOG_FILE_PATH:
+        relaunch_args.extend(["--log-file", str(LOG_FILE_PATH)])
+    ret = subprocess.call(relaunch_args)
     if ret != 0:
-        print()
-        print(f"[error] Script exited with code {ret}")
+        log.error(f"[error] Script exited with code {ret}")
         pause_and_exit(ret)
     sys.exit(0)
 
@@ -117,60 +193,48 @@ def ensure_node():
     if shutil.which("npm"):
         return
 
-    print("[setup] Node.js/npm not found. Attempting to install...")
+    log.info("[setup] Node.js/npm not found. Attempting to install...")
 
     if os.name == "nt":
-        # Windows - try winget
-        if shutil.which("winget"):
-            print("[setup] Installing Node.js via winget...")
-            subprocess.call(
-                ["winget", "install", "OpenJS.NodeJS.LTS",
-                 "--accept-package-agreements", "--accept-source-agreements"]
-            )
-            # winget installs to a new PATH entry - refresh by reading from registry
-            # User may need to restart the script for PATH to take effect
-            if not shutil.which("npm"):
-                print()
-                print("=" * 60)
-                print("  Node.js was installed but 'npm' is not yet in PATH.")
-                print("  Please close this window and re-run start.bat")
-                print("=" * 60)
-                pause_and_exit(1)
-        else:
-            print()
-            print("=" * 60)
-            print("  Node.js is not installed and winget is not available.")
-            print()
-            print("  Please install Node.js manually:")
-            print("    https://nodejs.org/")
-            print("  Then re-run this script.")
-            print("=" * 60)
-            pause_and_exit(1)
+        # On Windows, start.bat should have already set up Node.js
+        # via PATH detection or bundled zip extraction.
+        # If we still can't find npm, something went wrong.
+        log.error("")
+        log.error("=" * 60)
+        log.error("  Node.js/npm is not available.")
+        log.error("")
+        log.error("  If running directly (not via start.bat), please either:")
+        log.error("    1. Run start.bat instead (recommended)")
+        log.error("    2. Install Node.js from https://nodejs.org/")
+        log.error("=" * 60)
+        pause_and_exit(1)
     else:
         # macOS / Linux
         if shutil.which("brew"):
-            print("[setup] Installing Node.js via Homebrew...")
+            log.info("[setup] Installing Node.js via Homebrew...")
             subprocess.check_call(["brew", "install", "node"])
         elif shutil.which("apt-get"):
-            print("[setup] Installing Node.js via apt...")
+            log.info("[setup] Installing Node.js via apt...")
             subprocess.check_call(["sudo", "apt-get", "update"])
-            subprocess.check_call(["sudo", "apt-get", "install", "-y", "nodejs", "npm"])
+            subprocess.check_call(
+                ["sudo", "apt-get", "install", "-y", "nodejs", "npm"]
+            )
         elif shutil.which("dnf"):
-            print("[setup] Installing Node.js via dnf...")
+            log.info("[setup] Installing Node.js via dnf...")
             subprocess.check_call(["sudo", "dnf", "install", "-y", "nodejs", "npm"])
         else:
-            print()
-            print("=" * 60)
-            print("  Node.js is not installed.")
-            print("  Please install it from: https://nodejs.org/")
-            print("  Then re-run this script.")
-            print("=" * 60)
+            log.error("")
+            log.error("=" * 60)
+            log.error("  Node.js is not installed.")
+            log.error("  Please install it from: https://nodejs.org/")
+            log.error("  Then re-run this script.")
+            log.error("=" * 60)
             pause_and_exit(1)
 
     if shutil.which("npm"):
-        print("[setup] Node.js installed successfully.")
+        log.info("[setup] Node.js installed successfully.")
     else:
-        print("[error] npm still not found after install attempt.")
+        log.error("[error] npm still not found after install attempt.")
         pause_and_exit(1)
 
 
@@ -182,19 +246,19 @@ def ensure_frontend_built():
     if DIST_DIR.exists():
         return
 
-    print("[build] 'dist/' not found - building frontend...")
-    print()
+    log.info("[build] 'dist/' not found - building frontend...")
+    log.info("")
 
     # Check if package.json exists (are we in the full project?)
     package_json = BASE_DIR / "package.json"
     if not package_json.exists():
-        print("=" * 60)
-        print("ERROR: 'package.json' not found.")
-        print()
-        print("This folder is missing the project source code.")
-        print("Copy the entire RC-display project folder, not just")
-        print("start.py, to this PC.")
-        print("=" * 60)
+        log.error("=" * 60)
+        log.error("ERROR: 'package.json' not found.")
+        log.error("")
+        log.error("This folder is missing the project source code.")
+        log.error("Copy the entire RC-display project folder, not just")
+        log.error("start.py, to this PC.")
+        log.error("=" * 60)
         pause_and_exit(1)
 
     # Ensure Node.js is available
@@ -206,17 +270,17 @@ def ensure_frontend_built():
     # npm install
     node_modules = BASE_DIR / "node_modules"
     if not node_modules.exists():
-        print("[build] Running npm install...")
+        log.info("[build] Running npm install...")
         subprocess.check_call(["npm", "install"], cwd=str(BASE_DIR), shell=use_shell)
-        print("[build] npm install complete.")
+        log.info("[build] npm install complete.")
     else:
-        print("[build] node_modules/ exists, skipping npm install.")
+        log.info("[build] node_modules/ exists, skipping npm install.")
 
     # npm run build
-    print("[build] Running npm run build...")
+    log.info("[build] Running npm run build...")
     subprocess.check_call(["npm", "run", "build"], cwd=str(BASE_DIR), shell=use_shell)
-    print("[build] Frontend built successfully.")
-    print()
+    log.info("[build] Frontend built successfully.")
+    log.info("")
 
 
 # ---------------------------------------------------------------------------
@@ -226,13 +290,63 @@ def check_prerequisites():
     ensure_frontend_built()
 
     if not DATA_FILE.exists():
-        print("=" * 60)
-        print("ERROR: 'public/artifacts/data.json' not found.")
-        print()
-        print("Make sure the 'public/artifacts/' directory exists")
-        print("with at least a data.json file.")
-        print("=" * 60)
+        log.error("=" * 60)
+        log.error("ERROR: 'public/artifacts/data.json' not found.")
+        log.error("")
+        log.error("Make sure the 'public/artifacts/' directory exists")
+        log.error("with at least a data.json file.")
+        log.error("=" * 60)
         pause_and_exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Pre-flight summary
+# ---------------------------------------------------------------------------
+def print_preflight_summary():
+    """Display a summary of all checked dependencies."""
+    log.info("")
+    log.info("=" * 60)
+    log.info("  Pre-flight Check")
+    log.info("=" * 60)
+
+    # Python version
+    py_ver = sys.version.split()[0]
+    log.info(f"  Python ............. {py_ver:<20s} [ok]")
+
+    # Venv
+    log.info(f"  Virtual env ........ .venv/{'':<15s} [ok]")
+
+    # Flask version
+    try:
+        import flask
+
+        flask_ver = flask.__version__
+    except ImportError:
+        flask_ver = "missing"
+    log.info(f"  Flask .............. {flask_ver:<20s} [ok]")
+
+    # Node.js version
+    try:
+        use_shell = os.name == "nt"
+        node_ver = (
+            subprocess.check_output(
+                ["node", "--version"], stderr=subprocess.DEVNULL, shell=use_shell
+            )
+            .decode()
+            .strip()
+        )
+    except Exception:
+        node_ver = "bundled"
+    log.info(f"  Node.js ............ {node_ver:<20s} [ok]")
+
+    # Frontend
+    log.info(f"  Frontend ........... dist/{'':<16s} [ok]")
+
+    # data.json
+    log.info(f"  data.json .......... found{'':<15s} [ok]")
+
+    log.info("=" * 60)
+    log.info("")
 
 
 # ---------------------------------------------------------------------------
@@ -336,9 +450,10 @@ def create_app():
 # ---------------------------------------------------------------------------
 def open_browser():
     import time
+
     time.sleep(1.5)
     url = f"http://localhost:{PORT}"
-    print(f"[browser] Opening {url}")
+    log.info(f"[browser] Opening {url}")
     webbrowser.open(url)
 
 
@@ -346,41 +461,36 @@ def open_browser():
 # Main
 # ---------------------------------------------------------------------------
 def main():
-    docker_mode = "--docker" in sys.argv
+    args = parse_args()
+    setup_logging(args.log_file)
 
-    print()
-    print("=" * 60)
-    print("  Museum OLED Display - Starting...")
-    print("=" * 60)
-    print()
+    log.info("")
+    log.info("=" * 60)
+    log.info("  Museum OLED Display - Starting...")
+    log.info("=" * 60)
+    log.info("")
 
-    if not docker_mode:
-        # Local mode: handle venv, npm, etc.
-        ensure_venv_and_flask()
-        check_prerequisites()
-    else:
-        # Docker mode: just check data file exists
-        if not DATA_FILE.exists():
-            print("[warning] data.json not found, creating empty one...")
-            ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-            with open(DATA_FILE, "w", encoding="utf-8") as f:
-                json.dump({"artifacts": []}, f)
+    # Handle venv, npm, etc.
+    ensure_venv_and_flask()
+    check_prerequisites()
+
+    # Show pre-flight summary
+    print_preflight_summary()
 
     app = create_app()
 
-    print(f"[server] Serving frontend from: {DIST_DIR}")
-    print(f"[server] Serving artifacts from: {ARTIFACTS_DIR}")
-    print()
-    print(f"  Kiosk Display:  http://localhost:{PORT}/")
-    print(f"  Admin Panel:    http://localhost:{PORT}/admin")
-    print()
-    print("  Press Ctrl+C to stop the server.")
-    print("=" * 60)
-    print()
+    log.info(f"[server] Serving frontend from: {DIST_DIR}")
+    log.info(f"[server] Serving artifacts from: {ARTIFACTS_DIR}")
+    log.info("")
+    log.info(f"  Kiosk Display:  http://localhost:{PORT}/")
+    log.info(f"  Admin Panel:    http://localhost:{PORT}/admin")
+    log.info("")
+    log.info("  Press Ctrl+C to stop the server.")
+    log.info("=" * 60)
+    log.info("")
 
-    if not docker_mode:
-        # Open browser in a background thread (not in Docker)
-        threading.Thread(target=open_browser, daemon=True).start()
+    # Open browser in a background thread
+    threading.Thread(target=open_browser, daemon=True).start()
 
     # Start Flask server
     app.run(host=HOST, port=PORT, debug=False)
@@ -390,12 +500,15 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\n[server] Stopped.")
+        log.info("\n[server] Stopped.")
     except Exception as e:
-        print()
-        print("=" * 60)
-        print(f"ERROR: {e}")
-        print("=" * 60)
+        log.error("")
+        log.error("=" * 60)
+        log.error(f"ERROR: {e}")
+        log.error("=" * 60)
         import traceback
-        traceback.print_exc()
+
+        log.error(traceback.format_exc())
+        if LOG_FILE_PATH:
+            log.error(f"See log: {LOG_FILE_PATH}")
         pause_and_exit(1)

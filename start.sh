@@ -6,9 +6,24 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# ---------------------------------------------------------------------------
+# Log file setup — tee all output to a timestamped log file
+# ---------------------------------------------------------------------------
+LOG_DIR="$SCRIPT_DIR/logs"
+mkdir -p "$LOG_DIR"
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+LOG_FILE="$LOG_DIR/start_${TIMESTAMP}.log"
+
+# Redirect all stdout and stderr through tee (console + file)
+exec > >(tee -a "$LOG_FILE") 2>&1
+
 echo
 echo "============================================================"
 echo "  Museum OLED Display — Setup"
+echo "  Started: $(date)"
+echo "  Log: $LOG_FILE"
 echo "============================================================"
 echo
 
@@ -43,6 +58,8 @@ if [ -z "$PYTHON_CMD" ]; then
             echo "    brew install python3"
             echo
             echo "  Or download from: https://www.python.org/downloads/"
+            echo
+            echo "  See log: $LOG_FILE"
             echo "============================================================"
             read -p "Press Enter to exit..."
             exit 1
@@ -61,6 +78,8 @@ if [ -z "$PYTHON_CMD" ]; then
             echo "============================================================"
             echo "  Python 3 is not installed."
             echo "  Please install it using your package manager."
+            echo
+            echo "  See log: $LOG_FILE"
             echo "============================================================"
             read -p "Press Enter to exit..."
             exit 1
@@ -71,6 +90,9 @@ fi
 echo "[ok] Using: $PYTHON_CMD ($($PYTHON_CMD --version 2>&1))"
 echo
 
-# Run the Python launcher
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-$PYTHON_CMD "$SCRIPT_DIR/start.py"
+# Stop tee redirect before start.py takes over (it has its own file logging)
+# This prevents duplicate entries in the log file
+exec > /dev/tty 2>&1 || true
+
+# Run the Python launcher with log file path
+$PYTHON_CMD "$SCRIPT_DIR/start.py" --log-file "$LOG_FILE"
