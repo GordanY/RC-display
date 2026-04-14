@@ -12,6 +12,7 @@ dist/
 dist-ssr
 .superpowers/
 .venv/
+.node/
 *.local
 
 # Editor directories and files
