@@ -4,11 +4,12 @@ import { useIdleTimeout } from '../hooks/useIdleTimeout';
 import { useLanguage } from '../context/LanguageContext';
 import ArtifactTabs from './ArtifactTabs';
 import CreationPills from './CreationPills';
+import InfoView from './InfoView';
 import type { ContentView } from '../types';
 
 export default function KioskLayout() {
   const { data, loading, error } = useExhibitData();
-  const { language, toggleLanguage, t } = useLanguage();
+  const { language, toggleLanguage } = useLanguage();
   const [activeArtifactId, setActiveArtifactId] = useState<string>('');
   const [activeCreationId, setActiveCreationId] = useState<string>('');
   const [contentView, setContentView] = useState<ContentView>('info');
@@ -77,27 +78,20 @@ export default function KioskLayout() {
       {/* Content area — upper portion */}
       <div className="flex-1 overflow-hidden px-4 pb-2">
         {activeCreation && activeArtifact ? (
-          <div className="text-white">
-            <h1 className="text-gold text-xl font-bold">{t(activeCreation.title)}</h1>
-            <p className="text-gray-400 text-sm mt-1">{t(activeCreation.artist)}</p>
-            <p className="text-gray-500 text-sm mt-2 line-clamp-4">{t(activeCreation.description)}</p>
-            {/* Action buttons */}
-            <div className="flex gap-2 mt-4">
-              {(['info', 'model', 'comparison', 'video'] as ContentView[]).map(view => (
-                <button
-                  key={view}
-                  onClick={() => setContentView(view)}
-                  className={`px-3 py-2 rounded text-xs min-h-[44px] transition-colors ${
-                    contentView === view
-                      ? 'bg-gold text-black'
-                      : 'bg-gray-900 text-gray-400'
-                  }`}
-                >
-                  {view === 'info' ? 'Info' : view === 'model' ? '3D Model' : view === 'comparison' ? 'Compare' : 'Video'}
-                </button>
-              ))}
+          contentView === 'info' ? (
+            <InfoView
+              creation={activeCreation}
+              artifact={activeArtifact}
+              onViewChange={setContentView}
+            />
+          ) : (
+            <div className="text-gray-500 flex items-center justify-center h-full">
+              <div className="text-center">
+                <p className="text-lg">{contentView} view</p>
+                <button onClick={() => setContentView('info')} className="text-gold mt-2 min-h-[44px]">&larr; Back to Info</button>
+              </div>
             </div>
-          </div>
+          )
         ) : (
           <div className="text-gray-500">No creation selected</div>
         )}
