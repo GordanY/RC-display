@@ -52,6 +52,9 @@ def pause_and_exit(code=1):
 # ---------------------------------------------------------------------------
 def ensure_venv_and_flask():
     """Create a virtual environment, install Flask, and re-launch if needed."""
+    print(f"[debug] Python: {sys.executable}")
+    print(f"[debug] Project: {BASE_DIR}")
+
     if os.name == "nt":
         venv_python = VENV_DIR / "Scripts" / "python.exe"
     else:
@@ -59,6 +62,7 @@ def ensure_venv_and_flask():
 
     # If we're already running inside the venv, just return
     if VENV_DIR.exists() and Path(sys.executable).resolve() == venv_python.resolve():
+        print("[setup] Already in virtual environment.")
         return
 
     # Create venv if it doesn't exist
@@ -66,6 +70,18 @@ def ensure_venv_and_flask():
         print("[setup] Creating virtual environment...")
         subprocess.check_call([sys.executable, "-m", "venv", str(VENV_DIR)])
         print("[setup] Virtual environment created at .venv/")
+    else:
+        print("[setup] Virtual environment exists.")
+
+    # Verify venv python exists
+    if not venv_python.exists():
+        print(f"[error] venv Python not found at: {venv_python}")
+        print("[error] Deleting broken venv and retrying...")
+        shutil.rmtree(VENV_DIR, ignore_errors=True)
+        subprocess.check_call([sys.executable, "-m", "venv", str(VENV_DIR)])
+        if not venv_python.exists():
+            print(f"[error] Still not found. Python may not support venv.")
+            pause_and_exit(1)
 
     # Install Flask if not present in the venv
     result = subprocess.run(
@@ -80,9 +96,11 @@ def ensure_venv_and_flask():
             pip = VENV_DIR / "bin" / "pip3"
         subprocess.check_call([str(pip), "install", "flask"])
         print("[setup] Flask installed successfully.")
+    else:
+        print("[setup] Flask already installed.")
 
     # Re-launch this script under the venv python
-    print("[setup] Launching with virtual environment...")
+    print(f"[setup] Re-launching with: {venv_python}")
     ret = subprocess.call([str(venv_python), __file__] + sys.argv[1:])
     if ret != 0:
         print()
