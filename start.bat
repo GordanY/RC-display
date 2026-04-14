@@ -2,42 +2,38 @@
 title Museum OLED Display
 echo.
 echo ============================================================
-echo   Museum OLED Display — Setup
+echo   Museum OLED Display - Setup
 echo ============================================================
 echo.
 
 :: Check for Python
 where python >nul 2>nul
-if %ERRORLEVEL% == 0 (
-    echo [ok] Python found.
-    goto :run
-)
+if %ERRORLEVEL% == 0 goto :run
 
 where python3 >nul 2>nul
-if %ERRORLEVEL% == 0 (
-    echo [ok] Python3 found.
-    set PYTHON_CMD=python3
-    goto :run_python3
-)
+if %ERRORLEVEL% == 0 goto :run_python3
 
-:: Python not found — try to install
+:: Python not found - try to install
 echo [setup] Python not found. Attempting to install...
 echo.
 
-:: Try winget first
 where winget >nul 2>nul
-if %ERRORLEVEL% == 0 (
-    echo [setup] Installing Python via winget...
-    winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements
-    if %ERRORLEVEL% == 0 (
-        echo [setup] Python installed. You may need to restart this script.
-        echo [setup] If 'python' is still not found, close and reopen this window.
-        pause
-        goto :run
-    )
-)
+if %ERRORLEVEL% neq 0 goto :no_winget
 
-:: Winget failed or not available
+echo [setup] Installing Python via winget...
+winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements
+if %ERRORLEVEL% neq 0 goto :install_failed
+
+echo.
+echo [setup] Python installed successfully.
+echo [setup] Please CLOSE this window and double-click start.bat again.
+echo [setup] (PATH needs to refresh for the new Python installation)
+echo.
+pause
+exit /b 0
+
+:no_winget
+:install_failed
 echo.
 echo ============================================================
 echo   Python is not installed and could not be auto-installed.
@@ -53,19 +49,13 @@ pause
 exit /b 1
 
 :run
+echo [ok] Python found.
 python "%~dp0start.py"
-if %ERRORLEVEL% neq 0 (
-    echo.
-    echo [error] Script exited with an error.
-    pause
-)
+if %ERRORLEVEL% neq 0 pause
 goto :eof
 
 :run_python3
+echo [ok] Python3 found.
 python3 "%~dp0start.py"
-if %ERRORLEVEL% neq 0 (
-    echo.
-    echo [error] Script exited with an error.
-    pause
-)
+if %ERRORLEVEL% neq 0 pause
 goto :eof
