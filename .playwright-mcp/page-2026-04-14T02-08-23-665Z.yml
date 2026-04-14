@@ -1,0 +1,13 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - button "Dragon Bronze Vessel" [ref=e26] [cursor=pointer]
+    - button "Jade Spring Vase" [active] [ref=e27] [cursor=pointer]
+  - button "Starry Glaze Vase" [ref=e32] [cursor=pointer]
+  - button "EN/中" [ref=e30] [cursor=pointer]
+  - generic [ref=e13]:
+    - heading "Starry Glaze Vase" [level=1] [ref=e33]
+    - paragraph [ref=e15]: Zhang Dawei
+    - paragraph [ref=e16]: Jade Spring Vase · Song Dynasty (960–1279 CE)
+    - paragraph [ref=e17]: Inspired by the cosmos, with gradient glaze evoking a starry night sky.
+    - button [ref=e34] [cursor=pointer]
+    - button "Compare" [ref=e23] [cursor=pointer]

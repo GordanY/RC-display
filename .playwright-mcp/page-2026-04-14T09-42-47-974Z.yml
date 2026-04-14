@@ -1,0 +1,46 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - heading "Museum Display — Admin" [level=1] [ref=e6]
+    - link "Preview Kiosk" [ref=e8] [cursor=pointer]:
+      - /url: /
+  - generic [ref=e9]:
+    - generic [ref=e10]:
+      - heading "Artifacts" [level=2] [ref=e11]
+      - button "+ Add Artifact" [ref=e12] [cursor=pointer]
+    - generic [ref=e33]:
+      - generic [ref=e34]:
+        - textbox "Name (中文)" [ref=e35]: 龍紋青銅器
+        - textbox "Name (English)" [ref=e36]: Dragon Bronze Vessel
+      - generic [ref=e37]:
+        - textbox "Period (中文)" [ref=e38]: 商朝 (約公元前1600-1046年)
+        - textbox "Period (English)" [ref=e39]: Shang Dynasty (c. 1600–1046 BCE)
+      - textbox "Description (中文)" [ref=e40]: 此青銅器飾有精美的龍紋圖案，代表了商朝青銅鑄造技術的巔峰。
+      - textbox "Description (English)" [ref=e41]: This bronze vessel features intricate dragon motifs, representing the pinnacle of Shang Dynasty bronze casting.
+      - generic [ref=e42]:
+        - generic [ref=e43]: Original Photo
+        - button "Choose File" [ref=e44]
+        - generic [ref=e45]: sample-artifact-001/original-photo.jpg
+      - generic [ref=e46]:
+        - generic [ref=e47]:
+          - generic [ref=e48]: 3D Model (.obj)
+          - button "Choose File" [ref=e49]
+          - generic [ref=e50]: sample-artifact-001/tripo_convert_f6ec12c7-0844-48d9-9a28-3c106f3c4012.obj
+        - generic [ref=e51]:
+          - generic [ref=e52]: Material (.mtl)
+          - button "Choose File" [ref=e53]
+        - generic [ref=e54]:
+          - generic [ref=e55]: Textures
+          - button "Choose File" [ref=e56]
+      - generic [ref=e57]:
+        - button "Save" [ref=e58] [cursor=pointer]
+        - button "Cancel" [ref=e59] [cursor=pointer]
+    - generic [ref=e24]:
+      - generic [ref=e25]:
+        - text: 玉壺春瓶Jade Spring Vase
+        - generic [ref=e26]: 1 creations
+      - generic [ref=e27]:
+        - button "↑" [ref=e28] [cursor=pointer]
+        - button "↓" [ref=e29] [cursor=pointer]
+        - button "Edit" [ref=e30] [cursor=pointer]
+        - button "Creations" [ref=e31] [cursor=pointer]
+        - button "Delete" [ref=e32] [cursor=pointer]
