@@ -75,7 +75,11 @@ def ensure_venv_and_flask():
     # Re-launch this script under the venv python
     print("[setup] Launching with virtual environment...")
     ret = subprocess.call([str(venv_python), __file__] + sys.argv[1:])
-    sys.exit(ret)
+    if ret != 0:
+        print()
+        print(f"[error] Script exited with code {ret}")
+        pause_and_exit(ret)
+    sys.exit(0)
 
 
 # ---------------------------------------------------------------------------
@@ -169,18 +173,21 @@ def ensure_frontend_built():
     # Ensure Node.js is available
     ensure_node()
 
+    # On Windows, npm is a .cmd script and needs shell=True
+    use_shell = os.name == "nt"
+
     # npm install
     node_modules = BASE_DIR / "node_modules"
     if not node_modules.exists():
         print("[build] Running npm install...")
-        subprocess.check_call(["npm", "install"], cwd=str(BASE_DIR))
+        subprocess.check_call(["npm", "install"], cwd=str(BASE_DIR), shell=use_shell)
         print("[build] npm install complete.")
     else:
         print("[build] node_modules/ exists, skipping npm install.")
 
     # npm run build
     print("[build] Running npm run build...")
-    subprocess.check_call(["npm", "run", "build"], cwd=str(BASE_DIR))
+    subprocess.check_call(["npm", "run", "build"], cwd=str(BASE_DIR), shell=use_shell)
     print("[build] Frontend built successfully.")
     print()
 
