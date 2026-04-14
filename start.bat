@@ -27,7 +27,6 @@ if %ERRORLEVEL% neq 0 goto :install_failed
 echo.
 echo [setup] Python installed successfully.
 echo [setup] Please CLOSE this window and double-click start.bat again.
-echo [setup] (PATH needs to refresh for the new Python installation)
 echo.
 pause
 exit /b 0
@@ -50,12 +49,22 @@ exit /b 1
 
 :run
 echo [ok] Python found.
-python "%~dp0start.py"
-if %ERRORLEVEL% neq 0 pause
+echo [ok] Running start.py ...
+echo.
+python "%~dp0start.py" 2>&1
+echo.
+echo [info] start.py exited with code: %ERRORLEVEL%
+echo.
+pause
 goto :eof
 
 :run_python3
 echo [ok] Python3 found.
-python3 "%~dp0start.py"
-if %ERRORLEVEL% neq 0 pause
+echo [ok] Running start.py ...
+echo.
+python3 "%~dp0start.py" 2>&1
+echo.
+echo [info] start.py exited with code: %ERRORLEVEL%
+echo.
+pause
 goto :eof

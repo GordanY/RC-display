@@ -1,18 +1,27 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Museum OLED Display — One-Click Launcher
+Museum OLED Display - One-Click Launcher
 =========================================
 Run this script to start the museum display application.
 
     python start.py
 
 On first run, it will create a virtual environment and install Flask.
-Make sure 'dist/' exists (run 'npm run build' on the dev machine first).
 """
 
 import subprocess
 import sys
 import os
+
+# Fix Windows console encoding - must be before any print()
+if os.name == "nt":
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 import json
 import shutil
 import webbrowser
@@ -93,14 +102,14 @@ def ensure_node():
     print("[setup] Node.js/npm not found. Attempting to install...")
 
     if os.name == "nt":
-        # Windows — try winget
+        # Windows - try winget
         if shutil.which("winget"):
             print("[setup] Installing Node.js via winget...")
             subprocess.call(
                 ["winget", "install", "OpenJS.NodeJS.LTS",
                  "--accept-package-agreements", "--accept-source-agreements"]
             )
-            # winget installs to a new PATH entry — refresh by reading from registry
+            # winget installs to a new PATH entry - refresh by reading from registry
             # User may need to restart the script for PATH to take effect
             if not shutil.which("npm"):
                 print()
@@ -155,7 +164,7 @@ def ensure_frontend_built():
     if DIST_DIR.exists():
         return
 
-    print("[build] 'dist/' not found — building frontend...")
+    print("[build] 'dist/' not found - building frontend...")
     print()
 
     # Check if package.json exists (are we in the full project?)
@@ -321,7 +330,7 @@ def open_browser():
 def main():
     print()
     print("=" * 60)
-    print("  Museum OLED Display — Starting...")
+    print("  Museum OLED Display - Starting...")
     print("=" * 60)
     print()
 
