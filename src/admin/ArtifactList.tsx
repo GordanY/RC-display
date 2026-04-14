@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ExhibitData, Artifact } from '../types';
 import ArtifactForm from './ArtifactForm';
 import CreationList from './CreationList';
+import { deleteFile } from './api';
 
 interface Props {
   data: ExhibitData;
@@ -31,7 +32,8 @@ export default function ArtifactList({ data, onSave }: Props) {
     setEditingId(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    await deleteFile(id);
     onSave({ artifacts: data.artifacts.filter(a => a.id !== id) });
   };
 

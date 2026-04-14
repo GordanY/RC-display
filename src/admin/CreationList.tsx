@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Artifact, Creation } from '../types';
 import CreationForm from './CreationForm';
+import { deleteFile } from './api';
 
 interface Props {
   artifact: Artifact;
@@ -25,7 +26,8 @@ export default function CreationList({ artifact, onUpdate }: Props) {
     setEditingId(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    await deleteFile(`${artifact.id}/creations/${id}`);
     onUpdate({ ...artifact, creations: artifact.creations.filter(c => c.id !== id) });
   };
 

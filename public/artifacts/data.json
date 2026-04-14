@@ -2,19 +2,31 @@
   "artifacts": [
     {
       "id": "sample-artifact-001",
-      "name": { "zh": "龍紋青銅器", "en": "Dragon Bronze Vessel" },
-      "period": { "zh": "商朝 (約公元前1600-1046年)", "en": "Shang Dynasty (c. 1600–1046 BCE)" },
+      "name": {
+        "zh": "龍紋青銅器",
+        "en": "Dragon Bronze Vessel"
+      },
+      "period": {
+        "zh": "商朝 (約公元前1600-1046年)",
+        "en": "Shang Dynasty (c. 1600–1046 BCE)"
+      },
       "description": {
         "zh": "此青銅器飾有精美的龍紋圖案，代表了商朝青銅鑄造技術的巔峰。",
         "en": "This bronze vessel features intricate dragon motifs, representing the pinnacle of Shang Dynasty bronze casting."
       },
       "originalPhoto": "sample-artifact-001/original-photo.jpg",
-      "model": "sample-artifact-001/model.obj",
+      "model": "sample-artifact-001/tripo_convert_f6ec12c7-0844-48d9-9a28-3c106f3c4012.obj",
       "creations": [
         {
           "id": "creation-001",
-          "title": { "zh": "彩繪龍紋", "en": "Painted Dragon" },
-          "artist": { "zh": "王小明", "en": "Wang Xiaoming" },
+          "title": {
+            "zh": "彩繪龍紋",
+            "en": "Painted Dragon"
+          },
+          "artist": {
+            "zh": "王小明",
+            "en": "Wang Xiaoming"
+          },
           "description": {
             "zh": "以唐代壁畫的色彩為靈感，用丙烯顏料重新詮釋古銅器的龍紋圖案。",
             "en": "A vibrant reinterpretation using acrylic paint inspired by Tang Dynasty wall murals."
@@ -23,13 +35,18 @@
             "sample-artifact-001/creations/creation-001/photos/front.jpg",
             "sample-artifact-001/creations/creation-001/photos/side.jpg"
           ],
-          "video": "sample-artifact-001/creations/creation-001/video.mp4",
-          "model": "sample-artifact-001/creations/creation-001/model.obj"
+          "video": "sample-artifact-001/creations/creation-001/video.mp4"
         },
         {
           "id": "creation-002",
-          "title": { "zh": "龍之庭園", "en": "Dragon Garden" },
-          "artist": { "zh": "李小花", "en": "Li Xiaohua" },
+          "title": {
+            "zh": "龍之庭園",
+            "en": "Dragon Garden"
+          },
+          "artist": {
+            "zh": "李小花",
+            "en": "Li Xiaohua"
+          },
           "description": {
             "zh": "在青銅器周圍建造了一個微型中式庭園場景。",
             "en": "A miniature Chinese garden scene built around the bronze vessel."
@@ -42,8 +59,14 @@
     },
     {
       "id": "sample-artifact-002",
-      "name": { "zh": "玉壺春瓶", "en": "Jade Spring Vase" },
-      "period": { "zh": "宋朝 (960-1279年)", "en": "Song Dynasty (960–1279 CE)" },
+      "name": {
+        "zh": "玉壺春瓶",
+        "en": "Jade Spring Vase"
+      },
+      "period": {
+        "zh": "宋朝 (960-1279年)",
+        "en": "Song Dynasty (960–1279 CE)"
+      },
       "description": {
         "zh": "玉壺春瓶是宋代最典型的瓷器器形之一，以其優雅的曲線著稱。",
         "en": "The jade spring vase is one of the most iconic Song Dynasty ceramic forms, known for its elegant curves."
@@ -52,8 +75,14 @@
       "creations": [
         {
           "id": "creation-003",
-          "title": { "zh": "星空釉瓶", "en": "Starry Glaze Vase" },
-          "artist": { "zh": "張大偉", "en": "Zhang Dawei" },
+          "title": {
+            "zh": "星空釉瓶",
+            "en": "Starry Glaze Vase"
+          },
+          "artist": {
+            "zh": "張大偉",
+            "en": "Zhang Dawei"
+          },
           "description": {
             "zh": "以宇宙星空為靈感，在瓶身施以漸變釉彩。",
             "en": "Inspired by the cosmos, with gradient glaze evoking a starry night sky."
@@ -62,7 +91,8 @@
             "sample-artifact-002/creations/creation-003/photos/front.jpg"
           ]
         }
-      ]
+      ],
+      "model": "sample-artifact-002/P09.obj"
     }
   ]
 }

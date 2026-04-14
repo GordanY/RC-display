@@ -18,11 +18,30 @@ export default function ArtifactForm({ artifact, onSave, onCancel }: Props) {
     setForm(f => ({ ...f, originalPhoto: path }));
   };
 
+  const [mtlUploaded, setMtlUploaded] = useState('');
+  const [texturesUploaded, setTexturesUploaded] = useState(0);
+
   const handleModelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const path = await uploadFile(file, form.id);
     setForm(f => ({ ...f, model: path }));
+  };
+
+  const handleMtlUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadFile(file, form.id);
+    setMtlUploaded(file.name);
+  };
+
+  const handleTextureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    for (const file of Array.from(files)) {
+      await uploadFile(file, form.id);
+    }
+    setTexturesUploaded(prev => prev + files.length);
   };
 
   return (
@@ -49,16 +68,26 @@ export default function ArtifactForm({ artifact, onSave, onCancel }: Props) {
       <textarea placeholder="Description (English)" value={form.description.en}
         onChange={e => setForm(f => ({ ...f, description: { ...f.description, en: e.target.value } }))}
         className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white" rows={3} />
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-sm text-gray-400 block mb-1">Original Photo</label>
-          <input type="file" accept="image/*" onChange={handlePhotoUpload} className="text-gray-400 text-sm" />
-          {form.originalPhoto && <div className="text-gray-500 text-xs mt-1">{form.originalPhoto}</div>}
-        </div>
+      <div>
+        <label className="text-sm text-gray-400 block mb-1">Original Photo</label>
+        <input type="file" accept="image/*" onChange={handlePhotoUpload} className="text-gray-400 text-sm" />
+        {form.originalPhoto && <div className="text-gray-500 text-xs mt-1">{form.originalPhoto}</div>}
+      </div>
+      <div className="grid grid-cols-3 gap-3">
         <div>
           <label className="text-sm text-gray-400 block mb-1">3D Model (.obj)</label>
-          <input type="file" accept=".obj,.mtl" onChange={handleModelUpload} className="text-gray-400 text-sm" />
+          <input type="file" accept=".obj" onChange={handleModelUpload} className="text-gray-400 text-sm" />
           {form.model && <div className="text-gray-500 text-xs mt-1">{form.model}</div>}
+        </div>
+        <div>
+          <label className="text-sm text-gray-400 block mb-1">Material (.mtl)</label>
+          <input type="file" accept=".mtl" onChange={handleMtlUpload} className="text-gray-400 text-sm" />
+          {mtlUploaded && <div className="text-gray-500 text-xs mt-1">{mtlUploaded}</div>}
+        </div>
+        <div>
+          <label className="text-sm text-gray-400 block mb-1">Textures</label>
+          <input type="file" accept="image/*" multiple onChange={handleTextureUpload} className="text-gray-400 text-sm" />
+          {texturesUploaded > 0 && <div className="text-gray-500 text-xs mt-1">{texturesUploaded} uploaded</div>}
         </div>
       </div>
       <div className="flex gap-2 pt-2">

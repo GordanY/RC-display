@@ -49,7 +49,7 @@ export default function InfoView({ creation, artifact, onViewChange }: Props) {
 
       {/* Action buttons */}
       <div className="flex gap-2 mt-3 pb-2">
-        {creation.model && (
+        {(creation.model || artifact.model) && (
           <button onClick={() => onViewChange('model')} className="px-4 py-2 rounded bg-gray-900 text-gold text-sm min-h-[44px]">
             3D Model
           </button>

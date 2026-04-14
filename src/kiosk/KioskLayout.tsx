@@ -87,8 +87,8 @@ export default function KioskLayout() {
               artifact={activeArtifact}
               onViewChange={setContentView}
             />
-          ) : contentView === 'model' && activeCreation.model ? (
-            <ModelView modelPath={activeCreation.model} onClose={() => setContentView('info')} />
+          ) : contentView === 'model' && (activeCreation.model || activeArtifact.model) ? (
+            <ModelView modelPath={activeCreation.model || activeArtifact.model!} onClose={() => setContentView('info')} />
           ) : contentView === 'comparison' ? (
             <ComparisonView
               originalPhoto={activeArtifact.originalPhoto}
