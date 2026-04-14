@@ -6,95 +6,135 @@ echo   Museum OLED Display - Setup
 echo ============================================================
 echo.
 
-:: --- Try py launcher first (most reliable) ---
+:: =============================================
+:: STEP 1: Find or install Python
+:: =============================================
+echo [1/3] Checking Python...
+
 py -3 --version >nul 2>nul
 if %ERRORLEVEL% == 0 (
-    echo [ok] Python found via py launcher.
-    goto :run_py
+    set "PYTHON_CMD=py -3"
+    echo       [ok] Found via py launcher.
+    goto :python_ok
 )
 
-:: --- Try python with actual code execution ---
 python -c "print('ok')" >nul 2>nul
 if %ERRORLEVEL% == 0 (
-    echo [ok] Python found.
-    goto :run_python
+    set "PYTHON_CMD=python"
+    echo       [ok] Found in PATH.
+    goto :python_ok
 )
 
-:: --- Python not in PATH - search common install locations ---
-echo [setup] Python not in PATH. Searching common locations...
-
-:: Check standard python.org install paths
+:: Search common install locations
 for %%V in (313 312 311 310 39) do (
     if exist "%LOCALAPPDATA%\Programs\Python\Python%%V\python.exe" (
-        echo [ok] Found Python at: %LOCALAPPDATA%\Programs\Python\Python%%V\
-        set "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python%%V\python.exe"
-        goto :run_found
+        set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python%%V\python.exe"
+        echo       [ok] Found at %LOCALAPPDATA%\Programs\Python\Python%%V\
+        goto :python_ok
     )
 )
 for %%V in (313 312 311 310 39) do (
     if exist "C:\Python%%V\python.exe" (
-        echo [ok] Found Python at: C:\Python%%V\
-        set "PYTHON_EXE=C:\Python%%V\python.exe"
-        goto :run_found
+        set "PYTHON_CMD=C:\Python%%V\python.exe"
+        echo       [ok] Found at C:\Python%%V\
+        goto :python_ok
     )
 )
 for %%V in (313 312 311 310 39) do (
     if exist "%PROGRAMFILES%\Python%%V\python.exe" (
-        echo [ok] Found Python at: %PROGRAMFILES%\Python%%V\
-        set "PYTHON_EXE=%PROGRAMFILES%\Python%%V\python.exe"
-        goto :run_found
+        set "PYTHON_CMD=%PROGRAMFILES%\Python%%V\python.exe"
+        echo       [ok] Found at %PROGRAMFILES%\Python%%V\
+        goto :python_ok
     )
 )
 
-:: --- Not found anywhere - install it ---
-echo [setup] Python not found. Attempting to install...
-echo.
-
+:: Install Python
+echo       [!!] Not found. Installing via winget...
 where winget >nul 2>nul
-if %ERRORLEVEL% neq 0 goto :manual_install
-
-echo [setup] Installing Python via winget...
+if %ERRORLEVEL% neq 0 goto :fail_python
 winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements
-if %ERRORLEVEL% neq 0 goto :manual_install
+if %ERRORLEVEL% neq 0 goto :fail_python
 
-echo.
-echo [setup] Python installed.
-echo [setup] Please CLOSE this window and double-click start.bat again.
-echo.
-pause
-exit /b 0
+:: After install, find it
+for %%V in (313 312 311 310) do (
+    if exist "%LOCALAPPDATA%\Programs\Python\Python%%V\python.exe" (
+        set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python%%V\python.exe"
+        echo       [ok] Installed at %LOCALAPPDATA%\Programs\Python\Python%%V\
+        goto :python_ok
+    )
+)
+goto :fail_python
 
-:manual_install
-echo ============================================================
-echo   Python could not be found or installed automatically.
+:fail_python
 echo.
-echo   Please install from: https://www.python.org/downloads/
-echo   IMPORTANT: Check "Add Python to PATH" during install!
-echo ============================================================
+echo   ERROR: Cannot find or install Python.
+echo   Install manually from https://www.python.org/downloads/
 echo.
 pause
 exit /b 1
 
-:run_py
-echo [ok] Running start.py ...
+:python_ok
 echo.
-py -3 "%~dp0start.py"
-goto :done
 
-:run_python
-echo [ok] Running start.py ...
-echo.
-python "%~dp0start.py"
-goto :done
+:: =============================================
+:: STEP 2: Find or install Node.js
+:: =============================================
+echo [2/3] Checking Node.js...
 
-:run_found
-echo [ok] Running start.py ...
-echo.
-"%PYTHON_EXE%" "%~dp0start.py"
-goto :done
+:: Skip if frontend already built
+if exist "%~dp0dist\index.html" (
+    echo       [ok] Frontend already built, skipping Node.js.
+    goto :node_ok
+)
 
-:done
+call npm --version >nul 2>nul
+if %ERRORLEVEL% == 0 (
+    echo       [ok] Found in PATH.
+    goto :node_ok
+)
+
+:: Search common install locations
+if exist "%PROGRAMFILES%\nodejs\npm.cmd" (
+    set "PATH=%PROGRAMFILES%\nodejs;%PATH%"
+    echo       [ok] Found at %PROGRAMFILES%\nodejs\
+    goto :node_ok
+)
+
+:: Install Node.js
+echo       [!!] Not found. Installing via winget...
+where winget >nul 2>nul
+if %ERRORLEVEL% neq 0 goto :fail_node
+winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
+if %ERRORLEVEL% neq 0 goto :fail_node
+
+:: Add to PATH for this session
+if exist "%PROGRAMFILES%\nodejs\npm.cmd" (
+    set "PATH=%PROGRAMFILES%\nodejs;%PATH%"
+    echo       [ok] Installed at %PROGRAMFILES%\nodejs\
+    goto :node_ok
+)
+goto :fail_node
+
+:fail_node
 echo.
-echo [info] start.py exited with code: %ERRORLEVEL%
+echo   ERROR: Cannot find or install Node.js.
+echo   Install manually from https://nodejs.org/
+echo.
+pause
+exit /b 1
+
+:node_ok
+echo.
+
+:: =============================================
+:: STEP 3: Run start.py
+:: =============================================
+echo [3/3] Starting application...
+echo.
+
+%PYTHON_CMD% "%~dp0start.py"
+
+echo.
+echo [info] Exited with code: %ERRORLEVEL%
 echo.
 pause
