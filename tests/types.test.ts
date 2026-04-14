@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Artifact, Creation, ExhibitData } from '../src/types';
+import type { Creation, ExhibitData } from '../src/types';
 
 describe('ExhibitData types', () => {
   it('should accept valid exhibit data structure', () => {
