@@ -79,22 +79,117 @@ def ensure_venv_and_flask():
 
 
 # ---------------------------------------------------------------------------
+# Auto-install Node.js if needed
+# ---------------------------------------------------------------------------
+def ensure_node():
+    """Check if Node.js/npm is available, install if not."""
+    if shutil.which("npm"):
+        return
+
+    print("[setup] Node.js/npm not found. Attempting to install...")
+
+    if os.name == "nt":
+        # Windows — try winget
+        if shutil.which("winget"):
+            print("[setup] Installing Node.js via winget...")
+            subprocess.call(
+                ["winget", "install", "OpenJS.NodeJS.LTS",
+                 "--accept-package-agreements", "--accept-source-agreements"]
+            )
+            # winget installs to a new PATH entry — refresh by reading from registry
+            # User may need to restart the script for PATH to take effect
+            if not shutil.which("npm"):
+                print()
+                print("=" * 60)
+                print("  Node.js was installed but 'npm' is not yet in PATH.")
+                print("  Please close this window and re-run start.bat")
+                print("=" * 60)
+                pause_and_exit(1)
+        else:
+            print()
+            print("=" * 60)
+            print("  Node.js is not installed and winget is not available.")
+            print()
+            print("  Please install Node.js manually:")
+            print("    https://nodejs.org/")
+            print("  Then re-run this script.")
+            print("=" * 60)
+            pause_and_exit(1)
+    else:
+        # macOS / Linux
+        if shutil.which("brew"):
+            print("[setup] Installing Node.js via Homebrew...")
+            subprocess.check_call(["brew", "install", "node"])
+        elif shutil.which("apt-get"):
+            print("[setup] Installing Node.js via apt...")
+            subprocess.check_call(["sudo", "apt-get", "update"])
+            subprocess.check_call(["sudo", "apt-get", "install", "-y", "nodejs", "npm"])
+        elif shutil.which("dnf"):
+            print("[setup] Installing Node.js via dnf...")
+            subprocess.check_call(["sudo", "dnf", "install", "-y", "nodejs", "npm"])
+        else:
+            print()
+            print("=" * 60)
+            print("  Node.js is not installed.")
+            print("  Please install it from: https://nodejs.org/")
+            print("  Then re-run this script.")
+            print("=" * 60)
+            pause_and_exit(1)
+
+    if shutil.which("npm"):
+        print("[setup] Node.js installed successfully.")
+    else:
+        print("[error] npm still not found after install attempt.")
+        pause_and_exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Build frontend if dist/ is missing
+# ---------------------------------------------------------------------------
+def ensure_frontend_built():
+    """Run npm install + npm run build if dist/ doesn't exist."""
+    if DIST_DIR.exists():
+        return
+
+    print("[build] 'dist/' not found — building frontend...")
+    print()
+
+    # Check if package.json exists (are we in the full project?)
+    package_json = BASE_DIR / "package.json"
+    if not package_json.exists():
+        print("=" * 60)
+        print("ERROR: 'package.json' not found.")
+        print()
+        print("This folder is missing the project source code.")
+        print("Copy the entire RC-display project folder, not just")
+        print("start.py, to this PC.")
+        print("=" * 60)
+        pause_and_exit(1)
+
+    # Ensure Node.js is available
+    ensure_node()
+
+    # npm install
+    node_modules = BASE_DIR / "node_modules"
+    if not node_modules.exists():
+        print("[build] Running npm install...")
+        subprocess.check_call(["npm", "install"], cwd=str(BASE_DIR))
+        print("[build] npm install complete.")
+    else:
+        print("[build] node_modules/ exists, skipping npm install.")
+
+    # npm run build
+    print("[build] Running npm run build...")
+    subprocess.check_call(["npm", "run", "build"], cwd=str(BASE_DIR))
+    print("[build] Frontend built successfully.")
+    print()
+
+
+# ---------------------------------------------------------------------------
 # Check prerequisites
 # ---------------------------------------------------------------------------
 def check_prerequisites():
-    if not DIST_DIR.exists():
-        print("=" * 60)
-        print("ERROR: 'dist/' folder not found.")
-        print()
-        print("You need to build the frontend first on a machine")
-        print("with Node.js installed:")
-        print()
-        print("    npm install")
-        print("    npm run build")
-        print()
-        print("Then copy the entire project folder to this PC.")
-        print("=" * 60)
-        pause_and_exit(1)
+    ensure_frontend_built()
 
     if not DATA_FILE.exists():
         print("=" * 60)
