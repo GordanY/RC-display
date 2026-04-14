@@ -1,4 +1,6 @@
-const BASE = 'http://localhost:3001/api';
+// In dev mode (Vite on :5173), admin API runs on Express :3001
+// In production (Python start.py), API is on the same origin
+const BASE = import.meta.env.DEV ? 'http://localhost:3001/api' : '/api';
 
 export async function fetchData() {
   const res = await fetch(`${BASE}/data`);
