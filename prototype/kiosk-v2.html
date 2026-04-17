@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RC-display — Kiosk v2 Prototype</title>
+<style>
+  :root {
+    --bg: #000;
+    --panel: #0d0d0d;
+    --panel-2: #141414;
+    --border: #262626;
+    --border-hi: #3a3a3a;
+    --gold: #c9a86a;
+    --gold-hi: #e8c988;
+    --text: #e8e0d0;
+    --muted: #7a7a7a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; min-height: 100%;
+    background: #1a1a1a;
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    color: var(--text);
+    display: flex; flex-direction: column; align-items: center; padding: 20px;
+  }
+  .hint {
+    font-size: 12px; color: var(--muted); margin-bottom: 12px;
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .kiosk-wrap {
+    width: 1080px; height: 1920px;
+    transform-origin: top center;
+  }
+  .kiosk {
+    width: 1080px; height: 1920px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    position: relative; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+
+  /* ─── TOP HALF ─── */
+  .top-half { height: 960px; display: flex; flex-direction: column; padding: 20px; gap: 16px; }
+
+  .tabs-row { display: flex; align-items: stretch; gap: 12px; height: 72px; }
+  .tabs {
+    flex: 1; display: flex; gap: 8px; overflow-x: auto;
+    background: var(--panel); border: 1px solid var(--border);
+    padding: 8px; align-items: center;
+  }
+  .tabs::-webkit-scrollbar { height: 4px; }
+  .tabs::-webkit-scrollbar-thumb { background: var(--border-hi); }
+  .tab {
+    flex-shrink: 0; padding: 0 20px; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; color: var(--muted);
+    border: 1px solid transparent; cursor: pointer;
+    font-size: 18px; white-space: nowrap; transition: all .15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    background: var(--gold); color: #000; border-color: var(--gold-hi);
+    font-weight: 600;
+  }
+  .lang-toggle {
+    flex-shrink: 0; width: 72px;
+    background: var(--panel); border: 1px solid var(--border);
+    color: var(--gold); cursor: pointer; font-size: 16px;
+    transition: all .15s;
+  }
+  .lang-toggle:hover { border-color: var(--gold); }
+
+  .main { flex: 1; display: flex; gap: 16px; min-height: 0; }
+
+  .avatars {
+    width: 120px; display: flex; flex-direction: column; gap: 14px;
+    overflow-y: auto; padding: 4px;
+  }
+  .avatars::-webkit-scrollbar { width: 4px; }
+  .avatars::-webkit-scrollbar-thumb { background: var(--border-hi); }
+  .avatar {
+    flex-shrink: 0; width: 112px; height: 112px; border-radius: 50%;
+    border: 3px solid var(--border); cursor: pointer;
+    background-size: cover; background-position: center;
+    transition: all .15s;
+  }
+  .avatar:hover { border-color: var(--border-hi); }
+  .avatar.active { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(201,168,106,0.25); }
+
+  .center { flex: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .student-name {
+    font-size: 28px; color: var(--gold); letter-spacing: 0.02em;
+    padding: 4px 2px;
+  }
+  .media-display {
+    flex: 1; min-height: 0;
+    background: var(--panel); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+  }
+  .media-display img { width: 100%; height: 100%; object-fit: cover; }
+  .media-3d {
+    font-size: 88px; font-weight: 200; color: var(--gold);
+    letter-spacing: 0.1em;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .media-3d small { font-size: 16px; color: var(--muted); letter-spacing: 0.2em; }
+  .media-video-overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.35);
+    pointer-events: none;
+  }
+  .play-icon {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: rgba(0,0,0,0.5); border: 2px solid var(--gold);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .play-icon::before {
+    content: ""; width: 0; height: 0;
+    border-left: 22px solid var(--gold);
+    border-top: 14px solid transparent;
+    border-bottom: 14px solid transparent;
+    margin-left: 6px;
+  }
+  .paragraph {
+    min-height: 140px; max-height: 180px;
+    background: var(--panel); border: 1px solid var(--border);
+    padding: 16px 20px; font-size: 16px; line-height: 1.55;
+    color: var(--text); overflow-y: auto;
+  }
+
+  .thumbs {
+    width: 120px; display: flex; flex-direction: column; gap: 12px;
+    overflow-y: auto; padding: 4px;
+  }
+  .thumbs::-webkit-scrollbar { width: 4px; }
+  .thumbs::-webkit-scrollbar-thumb { background: var(--border-hi); }
+  .thumb {
+    flex-shrink: 0; width: 112px; height: 112px;
+    background: var(--panel); border: 2px solid var(--border);
+    cursor: pointer; position: relative; overflow: hidden;
+    transition: all .15s;
+  }
+  .thumb:hover { border-color: var(--border-hi); }
+  .thumb.active { border-color: var(--gold); }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .thumb.thumb-3d {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px; font-weight: 300; color: var(--gold);
+    letter-spacing: 0.1em;
+  }
+  .thumb.thumb-video::after {
+    content: ""; position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 0; height: 0;
+    border-left: 14px solid #fff;
+    border-top: 9px solid transparent;
+    border-bottom: 9px solid transparent;
+    filter: drop-shadow(0 0 3px rgba(0,0,0,0.7));
+  }
+
+  /* ─── BOTTOM HALF (literally empty per spec) ─── */
+  .bottom-half { height: 960px; background: #000; }
+</style>
+</head>
+<body>
+  <div class="hint">RC-display kiosk v2 prototype · actual size 1080 × 1920 (auto-scaled to fit window)</div>
+  <div class="kiosk-wrap" id="wrap">
+    <div class="kiosk">
+      <div class="top-half">
+        <div class="tabs-row">
+          <div class="tabs" id="tabs"></div>
+          <button class="lang-toggle" id="langToggle">EN/中</button>
+        </div>
+        <div class="main">
+          <div class="avatars" id="avatars"></div>
+          <div class="center">
+            <div class="student-name" id="studentName">—</div>
+            <div class="media-display" id="mediaDisplay"></div>
+            <div class="paragraph" id="paragraph">—</div>
+          </div>
+          <div class="thumbs" id="thumbs"></div>
+        </div>
+      </div>
+      <div class="bottom-half"></div>
+    </div>
+  </div>
+
+<script>
+const img = (seed, w=400, h=400) => `https://picsum.photos/seed/${seed}/${w}/${h}`;
+
+const data = {
+  artifacts: [
+    {
+      id: 'a1',
+      title: { zh: '青花瓷', en: 'Blue & White Porcelain' },
+      creations: [
+        { id: 'c1', name: { zh: '李小明', en: 'Li Xiaoming' },
+          icon: img('icon-lxm'),
+          desc: { zh: '这件作品以传统青花技法重新诠释了明代花鸟纹样，融入当代学生对自然的观察与想象。',
+                  en: 'This piece reinterprets Ming-dynasty flora-and-fauna motifs through a contemporary student lens on nature.' },
+          media: [ { type: '3d' }, { type: 'video', src: img('v-lxm-1', 800, 600) }, { type: 'image', src: img('p-lxm-1', 800, 600) }, { type: 'image', src: img('p-lxm-2', 800, 600) } ] },
+        { id: 'c2', name: { zh: '王美琳', en: 'Wang Meilin' },
+          icon: img('icon-wml'),
+          desc: { zh: '作品采用缠枝莲花为主纹，呈现出秩序感与生长感的平衡。',
+                  en: 'Uses an interlaced lotus pattern to balance order and organic growth.' },
+          media: [ { type: '3d' }, { type: 'video', src: img('v-wml-1', 800, 600) }, { type: 'image', src: img('p-wml-1', 800, 600) } ] },
+        { id: 'c3', name: { zh: '张伟', en: 'Zhang Wei' },
+          icon: img('icon-zw'),
+          desc: { zh: '以山水为骨，留白为意；是对宋元山水意境的一次当代致敬。',
+                  en: 'Landscape as structure, negative space as meaning — a contemporary nod to Song-Yuan landscape aesthetics.' },
+          media: [ { type: 'image', src: img('p-zw-1', 800, 600) }, { type: 'image', src: img('p-zw-2', 800, 600) } ] },
+      ]
+    },
+    {
+      id: 'a2',
+      title: { zh: '唐三彩', en: 'Tang Sancai' },
+      creations: [
+        { id: 'c4', name: { zh: '陈雅文', en: 'Chen Yawen' },
+          icon: img('icon-cyw'),
+          desc: { zh: '以唐三彩釉色的流动为灵感，在立体结构上呈现色彩的偶然与秩序。',
+                  en: 'Inspired by the flowing glaze of Tang Sancai — color finds a balance between accident and order.' },
+          media: [ { type: '3d' }, { type: 'video', src: img('v-cyw-1', 800, 600) }, { type: 'image', src: img('p-cyw-1', 800, 600) } ] },
+        { id: 'c5', name: { zh: '林子豪', en: 'Lin Zihao' },
+          icon: img('icon-lzh'),
+          desc: { zh: '以骆驼俑为母题，重构商队行旅的叙事空间。',
+                  en: 'Reconstructs the caravan narrative using the classical camel-figurine motif.' },
+          media: [ { type: '3d' }, { type: 'image', src: img('p-lzh-1', 800, 600) }, { type: 'image', src: img('p-lzh-2', 800, 600) } ] },
+        { id: 'c6', name: { zh: '赵敏', en: 'Zhao Min' },
+          icon: img('icon-zm'),
+          desc: { zh: '探索唐代仕女陶俑的当代身体性，重新思考"优雅"的定义。',
+                  en: 'Examines the embodiment of Tang-era court-lady figurines — rethinking what "grace" means today.' },
+          media: [ { type: 'video', src: img('v-zm-1', 800, 600) }, { type: 'image', src: img('p-zm-1', 800, 600) } ] },
+      ]
+    },
+    {
+      id: 'a3',
+      title: { zh: '青铜器', en: 'Bronze Vessel' },
+      creations: [
+        { id: 'c7', name: { zh: '何思远', en: 'He Siyuan' },
+          icon: img('icon-hsy'),
+          desc: { zh: '以饕餮纹的对称性出发，讨论威严与恐惧在视觉形式中的同构性。',
+                  en: 'Starts from the symmetry of the taotie motif to explore how authority and fear share the same visual grammar.' },
+          media: [ { type: '3d' }, { type: 'video', src: img('v-hsy-1', 800, 600) }, { type: 'image', src: img('p-hsy-1', 800, 600) }, { type: 'image', src: img('p-hsy-2', 800, 600) } ] },
+        { id: 'c8', name: { zh: '周悦', en: 'Zhou Yue' },
+          icon: img('icon-zy'),
+          desc: { zh: '将商周青铜铭文拆解为单字符号，重新组合成当代叙事。',
+                  en: 'Breaks Shang-Zhou bronze inscriptions into single-character tokens and reassembles them into contemporary narratives.' },
+          media: [ { type: '3d' }, { type: 'image', src: img('p-zy-1', 800, 600) }, { type: 'image', src: img('p-zy-2', 800, 600) } ] },
+        { id: 'c9', name: { zh: '吴天宇', en: 'Wu Tianyu' },
+          icon: img('icon-wty'),
+          desc: { zh: '以鼎为结构单元，重新思考"承载"这一概念。',
+                  en: 'Uses the ding (tripod cauldron) as a structural unit to reconsider what it means "to carry".' },
+          media: [ { type: 'video', src: img('v-wty-1', 800, 600) }, { type: 'image', src: img('p-wty-1', 800, 600) } ] },
+      ]
+    },
+  ]
+};
+
+const state = {
+  lang: 'en',
+  artifactId: data.artifacts[0].id,
+  creationId: data.artifacts[0].creations[0].id,
+  mediaIdx: 0,
+};
+
+const $ = (id) => document.getElementById(id);
+const currentArtifact = () => data.artifacts.find(a => a.id === state.artifactId);
+const currentCreation = () => currentArtifact().creations.find(c => c.id === state.creationId);
+
+const mediaOrder = { '3d': 0, 'video': 1, 'image': 2 };
+const sortedMedia = (creation) => [...creation.media].sort((a, b) => mediaOrder[a.type] - mediaOrder[b.type]);
+
+function render() {
+  const artifact = currentArtifact();
+  const creation = currentCreation();
+  const media = sortedMedia(creation);
+  const active = media[state.mediaIdx] ?? media[0];
+
+  $('tabs').innerHTML = data.artifacts.map(a =>
+    `<button class="tab ${a.id === state.artifactId ? 'active' : ''}" data-aid="${a.id}">${a.title[state.lang]}</button>`
+  ).join('');
+
+  $('langToggle').textContent = state.lang === 'en' ? 'EN/中' : '中/EN';
+
+  $('avatars').innerHTML = artifact.creations.map(c =>
+    `<div class="avatar ${c.id === state.creationId ? 'active' : ''}"
+          data-cid="${c.id}"
+          style="background-image:url('${c.icon}')"></div>`
+  ).join('');
+
+  $('studentName').textContent = creation.name[state.lang];
+  $('paragraph').textContent = creation.desc[state.lang];
+
+  $('thumbs').innerHTML = media.map((m, i) => {
+    const cls = `thumb ${i === state.mediaIdx ? 'active' : ''} ${m.type === '3d' ? 'thumb-3d' : ''} ${m.type === 'video' ? 'thumb-video' : ''}`;
+    const inner = m.type === '3d' ? '3D' : `<img src="${m.src}" alt="">`;
+    return `<div class="${cls}" data-midx="${i}">${inner}</div>`;
+  }).join('');
+
+  const md = $('mediaDisplay');
+  if (!active) {
+    md.innerHTML = '<div class="media-3d"><small>no media</small></div>';
+  } else if (active.type === '3d') {
+    md.innerHTML = '<div class="media-3d">3D<small>interactive model</small></div>';
+  } else if (active.type === 'video') {
+    md.innerHTML = `<img src="${active.src}" alt=""><div class="media-video-overlay"><div class="play-icon"></div></div>`;
+  } else {
+    md.innerHTML = `<img src="${active.src}" alt="">`;
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-aid],[data-cid],[data-midx]') || (e.target.id === 'langToggle' ? e.target : null);
+  if (!t) return;
+  if (t.id === 'langToggle') { state.lang = state.lang === 'en' ? 'zh' : 'en'; render(); return; }
+  if (t.dataset.aid) {
+    state.artifactId = t.dataset.aid;
+    state.creationId = currentArtifact().creations[0].id;
+    state.mediaIdx = 0;
+    render(); return;
+  }
+  if (t.dataset.cid) {
+    state.creationId = t.dataset.cid;
+    state.mediaIdx = 0;
+    render(); return;
+  }
+  if (t.dataset.midx !== undefined) {
+    state.mediaIdx = Number(t.dataset.midx);
+    render(); return;
+  }
+});
+
+function fitToViewport() {
+  const wrap = $('wrap');
+  const available = window.innerHeight - 80;
+  const scale = Math.min(1, available / 1920);
+  wrap.style.transform = `scale(${scale})`;
+  wrap.style.width = (1080 * scale) + 'px';
+  wrap.style.height = (1920 * scale) + 'px';
+}
+window.addEventListener('resize', fitToViewport);
+fitToViewport();
+render();
+</script>
+</body>
+</html>

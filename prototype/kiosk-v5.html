@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>RC-display — Kiosk v5</title>
+<style>
+@font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url(./fonts/geistmono-1.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url(./fonts/geistmono-2.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Noto Sans SC'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url(./fonts/notosans-0.woff2) format('woff2'); }
+@font-face { font-family: 'Noto Sans SC'; font-style: normal; font-weight: 500; font-display: swap;
+  src: url(./fonts/notosans-1.woff2) format('woff2'); }
+
+:root {
+  --bg: #0A0A0A; --surface: #141414; --surface-2: #1A1A1A;
+  --border: #262626; --border-hi: #404040;
+  --text: #EDEDED; --muted: #8F8F8F; --dim: #5A5A5A;
+  --ease: cubic-bezier(0.22, 0.9, 0.3, 1);
+  --font-cn:   'Noto Sans SC', 'PingFang TC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft JhengHei', sans-serif;
+  --font-mono: 'Geist Mono', 'SF Mono', Menlo, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; min-height: 100%; background: #080808; font-family: var(--font-cn); color: var(--text); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body { display: flex; flex-direction: column; align-items: center; padding: 20px; gap: 12px; }
+.preview-note { font-family: var(--font-mono); font-size: 13px; color: var(--dim); letter-spacing: 0.05em; }
+
+.kiosk-wrap { width: 1080px; height: 1920px; transform-origin: top center; }
+.kiosk { width: 1080px; height: 1920px; background: var(--bg); overflow: hidden; display: flex; flex-direction: column; }
+
+.content { padding: 48px; display: flex; flex-direction: column; }
+
+.exhibit-title {
+  font-family: var(--font-cn);
+  font-size: 36px; font-weight: 500;
+  color: var(--text); line-height: 1.2;
+  letter-spacing: 0.01em;
+  margin-bottom: 20px;
+}
+
+/* Artifact tabs */
+.tabs {
+  display: flex; gap: 12px;
+  overflow-x: auto; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 30px), transparent 100%);
+          mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 30px), transparent 100%);
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  flex-shrink: 0;
+  padding: 14px 30px; min-height: 56px;
+  background: var(--surface); border: 1px solid var(--border);
+  cursor: pointer;
+  font-family: var(--font-cn); font-size: 26px; font-weight: 500;
+  color: var(--muted); white-space: nowrap;
+  transition: all 180ms var(--ease);
+  display: inline-flex; align-items: center;
+}
+.tab:hover { color: var(--text); border-color: var(--border-hi); }
+.tab.active { color: var(--text); border-color: var(--text); background: var(--surface-2); }
+
+/* Canvas */
+.canvas {
+  margin-top: 28px;
+  width: 100%; aspect-ratio: 1 / 1;
+  position: relative; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 50%, var(--surface-2) 0%, var(--surface) 75%, var(--bg) 100%);
+  border: 1px solid var(--border);
+}
+.canvas-inner {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  opacity: 1; transition: opacity 240ms var(--ease);
+}
+.canvas-inner.fading { opacity: 0; }
+.canvas-3d { font-size: 202px; font-weight: 500; color: var(--text); letter-spacing: -0.04em; line-height: 1; font-family: var(--font-cn); }
+.canvas-caption { font-family: var(--font-mono); font-size: 13px; color: var(--dim); letter-spacing: 0.2em; text-transform: uppercase; }
+.canvas-footer {
+  position: absolute; bottom: 32px; right: 32px; z-index: 3;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+  text-align: right; pointer-events: none;
+  transition: opacity 240ms var(--ease);
+}
+.canvas-footer.hidden { opacity: 0; }
+.canvas-footer .primary { font-family: var(--font-cn); font-size: 36px; font-weight: 500; color: var(--text); line-height: 1.1; }
+.canvas-footer .secondary { font-family: var(--font-cn); font-size: 19px; font-weight: 400; color: var(--muted); line-height: 1.3; }
+
+/* Section label (plain Chinese heading) */
+.section { margin-top: 32px; }
+.section-label {
+  font-family: var(--font-cn);
+  font-size: 22px; font-weight: 500;
+  color: var(--text); line-height: 1.2;
+  margin-bottom: 14px;
+}
+
+/* Student thumbs */
+.thumbs {
+  display: flex; gap: 16px;
+  overflow-x: auto; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 30px), transparent 100%);
+          mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 30px), transparent 100%);
+}
+.thumbs::-webkit-scrollbar { display: none; }
+.thumb { flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; cursor: pointer; background: transparent; border: none; padding: 0; }
+.thumb-tile { width: 168px; height: 128px; background: var(--surface); border: 1px solid var(--border); overflow: hidden; position: relative; transition: border-color 180ms var(--ease); }
+.thumb-tile img { width: 100%; height: 100%; object-fit: cover; filter: saturate(0.8); transition: filter 180ms var(--ease); }
+.thumb:hover .thumb-tile { border-color: var(--border-hi); }
+.thumb.active .thumb-tile { border-color: var(--text); }
+.thumb:hover .thumb-tile img, .thumb.active .thumb-tile img { filter: saturate(1); }
+.thumb-name { font-family: var(--font-cn); font-size: 18px; font-weight: 400; color: var(--muted); text-align: left; transition: color 180ms var(--ease); }
+.thumb.active .thumb-name { color: var(--text); }
+
+/* Description */
+.description { font-family: var(--font-cn); font-size: 20px; line-height: 1.75; color: var(--text); max-width: 62ch; min-height: 90px; letter-spacing: 0.01em; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+  <div class="preview-note">kiosk v5 · 1080 × 1920 · 純中文 · 3D only · auto-scaled</div>
+  <div class="kiosk-wrap" id="wrap">
+    <div class="kiosk">
+      <div class="content">
+
+        <h1 class="exhibit-title" id="exhibitTitle"></h1>
+
+        <div class="tabs" id="tabs"></div>
+
+        <div class="canvas" id="canvas">
+          <div class="canvas-inner" id="canvasInner"></div>
+          <div class="canvas-footer hidden" id="canvasFooter"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-label">學生作品</div>
+          <div class="thumbs" id="thumbs"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-label">古玩藏品介紹</div>
+          <div class="description" id="description"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+<script>
+const img = (seed, w=400, h=400) => `https://picsum.photos/seed/${seed}/${w}/${h}`;
+
+const data = {
+  exhibitTitle: '張宗憲先生古玩藏品',
+  artifacts: [
+    { id: 'a1', title: '青花瓷',
+      description: '明代典型青花器，以鈷料繪製纏枝花卉紋，釉色深沉明亮，為宮廷御用之器。',
+      preview: img('art-jh', 400, 400), model: 'original-jh.glb',
+      creations: [
+        { id: 'c1', name: '李小明', school: '聖保羅書院',       displayMode: 'individual', preview: img('stu-lxm', 400, 300), model: 'lxm.glb' },
+        { id: 'c2', name: '王美琳', school: '嘉諾撒聖瑪利書院', displayMode: 'individual', preview: img('stu-wml', 400, 300), model: 'wml.glb' },
+        { id: 'c3', name: '張偉',   school: '培正中學',         displayMode: 'school',     preview: img('stu-zw',  400, 300), model: 'zw.glb' },
+        { id: 'c4', name: '劉思',   school: '皇仁書院',         displayMode: 'individual', preview: img('stu-ls',  400, 300), model: 'ls.glb' },
+      ] },
+    { id: 'a2', title: '唐三彩',
+      description: '以鉛釉低溫燒成，釉色黃、綠、白三色流淌交融，為盛唐陶俑典範。',
+      preview: img('art-tang', 400, 400), model: 'original-tang.glb',
+      creations: [
+        { id: 'c5', name: '陳雅文', school: '拔萃女書院',   displayMode: 'individual', preview: img('stu-cyw', 400, 300), model: 'cyw.glb' },
+        { id: 'c6', name: '林子豪', school: '英皇書院',     displayMode: 'school',     preview: img('stu-lzh', 400, 300), model: 'lzh.glb' },
+        { id: 'c7', name: '趙敏',   school: '瑪利諾修院學校', displayMode: 'individual', preview: img('stu-zm',  400, 300), model: 'zm.glb' },
+      ] },
+    { id: 'a3', title: '青銅器',
+      description: '饕餮紋青銅鼎，器腹分為三段，紋飾對稱穩定，為周代禮器典範。',
+      preview: img('art-br', 400, 400), model: 'original-br.glb',
+      creations: [
+        { id: 'c8', name: '何思遠', school: '香港華仁書院', displayMode: 'individual', preview: img('stu-hsy', 400, 300), model: 'hsy.glb' },
+        { id: 'c9', name: '周悅',   school: '聖士提反女子中學', displayMode: 'school', preview: img('stu-zy',  400, 300), model: 'zy.glb' },
+      ] },
+  ]
+};
+
+const state = { artifactId: data.artifacts[0].id, creationId: null };
+const curArt = () => data.artifacts.find(a => a.id === state.artifactId);
+const curCre = () => state.creationId === null ? null : curArt()?.creations.find(c => c.id === state.creationId);
+const isArtifactView = () => state.creationId === null;
+
+const $ = (id) => document.getElementById(id);
+function el(tag, props = {}, children = []) {
+  const e = document.createElement(tag);
+  for (const k in props) {
+    if (k === 'class') e.className = props[k];
+    else if (k === 'style') e.style.cssText = props[k];
+    else if (k.startsWith('data-') || k.startsWith('aria-') || k === 'title' || k === 'src' || k === 'alt') e.setAttribute(k, props[k]);
+    else e[k] = props[k];
+  }
+  for (const c of children) { if (c == null) continue; e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); }
+  return e;
+}
+function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+const dom = {
+  exhibitTitle: $('exhibitTitle'),
+  tabs: $('tabs'), thumbs: $('thumbs'),
+  canvas: $('canvas'), canvasInner: $('canvasInner'), canvasFooter: $('canvasFooter'),
+  description: $('description'),
+  tabButtons: [], thumbButtons: [],
+};
+
+function renderExhibitTitle() { dom.exhibitTitle.textContent = data.exhibitTitle || ''; }
+
+function buildTabs() {
+  clear(dom.tabs);
+  data.artifacts.forEach(a => {
+    const tab = el('button', { class: 'tab' + (a.id === state.artifactId ? ' active' : ''), 'data-aid': a.id }, [a.title]);
+    dom.tabs.appendChild(tab);
+  });
+  dom.tabButtons = [...dom.tabs.querySelectorAll('.tab')];
+}
+function setActiveTab() { dom.tabButtons.forEach(b => b.classList.toggle('active', b.dataset.aid === state.artifactId)); }
+
+function buildThumbs() {
+  clear(dom.thumbs);
+  const a = curArt(); if (!a) return;
+  a.creations.forEach(c => {
+    const tile = el('div', { class: 'thumb-tile' }, [el('img', { src: c.preview, alt: c.name })]);
+    const name = el('span', { class: 'thumb-name' }, [c.name]);
+    const thumb = el('button', { class: 'thumb' + (c.id === state.creationId ? ' active' : ''), 'data-cid': c.id }, [tile, name]);
+    dom.thumbs.appendChild(thumb);
+  });
+  dom.thumbButtons = [...dom.thumbs.querySelectorAll('.thumb')];
+}
+function setActiveThumb() { dom.thumbButtons.forEach(b => b.classList.toggle('active', b.dataset.cid === state.creationId)); }
+
+let _canvasTimer = null;
+function updateCanvas(animate = true) {
+  const swap = () => {
+    clear(dom.canvasInner);
+    const glyph = el('div', { class: 'canvas-3d' }, ['3D']);
+    const caption = el('div', { class: 'canvas-caption' }, [isArtifactView() ? '原作 · ORIGINAL' : '學生作品 · STUDENT WORK']);
+    dom.canvasInner.appendChild(glyph);
+    dom.canvasInner.appendChild(caption);
+  };
+  if (!animate) { swap(); updateCanvasFooter(); return; }
+  dom.canvasInner.classList.add('fading');
+  clearTimeout(_canvasTimer);
+  _canvasTimer = setTimeout(() => { swap(); requestAnimationFrame(() => dom.canvasInner.classList.remove('fading')); }, 180);
+  updateCanvasFooter();
+}
+
+function updateCanvasFooter() {
+  const c = curCre();
+  clear(dom.canvasFooter);
+  if (!c) { dom.canvasFooter.classList.add('hidden'); return; }
+  const mode = c.displayMode || 'individual';
+  const primary   = mode === 'individual' ? (c.name   || '—') : (c.school || '—');
+  const secondary = mode === 'individual' ? (c.school || '—') : (c.name   || '—');
+  dom.canvasFooter.appendChild(el('div', { class: 'primary' },   [primary]));
+  dom.canvasFooter.appendChild(el('div', { class: 'secondary' }, [secondary]));
+  dom.canvasFooter.classList.remove('hidden');
+}
+
+function updateDescription() { dom.description.textContent = curArt()?.description ?? ''; }
+
+/* Handlers */
+dom.tabs.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-aid]'); if (!b) return;
+  const sameArtifact = b.dataset.aid === state.artifactId;
+  state.artifactId = b.dataset.aid;
+  state.creationId = null;   // tab click always resets to artifact
+  setActiveTab();
+  if (!sameArtifact) { buildThumbs(); updateDescription(); }
+  else { setActiveThumb(); }
+  updateCanvas();
+});
+dom.thumbs.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-cid]'); if (!b) return;
+  if (b.dataset.cid === state.creationId) return;
+  state.creationId = b.dataset.cid;
+  setActiveThumb(); updateCanvas();
+});
+
+document.addEventListener('keydown', (e) => {
+  const artifacts = data.artifacts;
+  const artifact = curArt();
+  const creations = artifact?.creations ?? [];
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    const d = e.key === 'ArrowRight' ? 1 : -1;
+    const idx = artifacts.indexOf(artifact);
+    const next = artifacts[(idx + d + artifacts.length) % artifacts.length];
+    state.artifactId = next.id; state.creationId = null;
+    setActiveTab(); buildThumbs(); updateCanvas(); updateDescription();
+    e.preventDefault();
+  } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    const seq = [null, ...creations.map(c => c.id)];
+    const cur = seq.indexOf(state.creationId);
+    const d = e.key === 'ArrowDown' ? 1 : -1;
+    state.creationId = seq[(cur + d + seq.length) % seq.length];
+    setActiveThumb(); updateCanvas();
+    e.preventDefault();
+  } else if (/^[1-9]$/.test(e.key)) {
+    const n = Number(e.key) - 1;
+    if (n < creations.length) { state.creationId = creations[n].id; setActiveThumb(); updateCanvas(); }
+  } else if (e.key === '0') {
+    state.creationId = null; setActiveThumb(); updateCanvas();
+  }
+});
+
+function fit() {
+  const wrap = $('wrap');
+  const available = window.innerHeight - 80;
+  const scale = Math.min(1, available / 1920);
+  wrap.style.transform = `scale(${scale})`;
+  wrap.style.width = (1080 * scale) + 'px';
+  wrap.style.height = (1920 * scale) + 'px';
+}
+window.addEventListener('resize', fit);
+fit();
+
+renderExhibitTitle();
+buildTabs(); buildThumbs();
+updateCanvas(false); updateDescription();
+</script>
+</body>
+</html>
