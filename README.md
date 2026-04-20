@@ -30,7 +30,7 @@ start.bat
 
 #### What it does
 
-1. Finds (or installs) Python 3 — tries PATH, common install locations, winget, and direct download from python.org
+1. Finds (or extracts) Python 3 — tries PATH, common install locations, or extracts the bundled tarball from `tools/`. Falls back to winget / python.org if the tarball is missing
 2. Finds (or extracts) Node.js — tries PATH or extracts the bundled zip from `tools/`
 3. Creates a Python virtual environment (`.venv/`) and installs Flask
 4. Runs `npm install` and `npm run build` if `dist/` doesn't exist yet
@@ -78,9 +78,9 @@ To set up another PC:
 
 1. `git clone` the repo (or `git pull` if it already exists)
 2. Copy `public/artifacts/` from the source PC via USB / rsync / network share
-3. Run `start.bat` (Windows) or `./start.sh` (macOS/Linux) — it will auto-install Python, Node.js, and project dependencies on first run (requires internet), then build and launch
+3. Run `start.bat` (Windows) or `./start.sh` (macOS/Linux) — it will auto-install Python, Node.js, and project dependencies on first run, then build and launch
 
-On subsequent runs, start-up is offline-capable. When source code changes (e.g. after `git pull`), `start.py` detects the staleness and rebuilds the frontend automatically.
+On Windows, the Python and Node.js runtimes are bundled under `tools/` and extract locally on first run — no admin rights or installer needed. First-run internet is only required for `pip install flask` (~2 MB) and `npm install`. On macOS/Linux, first run installs Node.js via Homebrew / apt (Python is expected to be present). On subsequent runs, start-up is offline-capable. When source code changes (e.g. after `git pull`), `start.py` detects the staleness and rebuilds the frontend automatically.
 
 ## React Compiler
 

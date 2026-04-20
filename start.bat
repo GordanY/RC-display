@@ -68,6 +68,28 @@ for %%V in (313 312 311 310 39) do (
     )
 )
 
+:: Try bundled Python tarball (offline, no admin, no installer)
+set "PY_DIR=%~dp0.python"
+set "PY_TGZ=%~dp0tools\cpython-3.12.13+20260414-x86_64-pc-windows-msvc-install_only.tar.gz"
+
+if exist "%PY_DIR%\python\python.exe" (
+    set "PYTHON_CMD=%PY_DIR%\python\python.exe"
+    call :LOG "      [ok] Already extracted at %PY_DIR%\python\"
+    goto :python_ok
+)
+
+if exist "%PY_TGZ%" (
+    call :LOG "      [--] Not found. Extracting bundled Python..."
+    if not exist "%PY_DIR%" mkdir "%PY_DIR%"
+    tar -xzf "%PY_TGZ%" -C "%PY_DIR%" >> "%LOG_FILE%" 2>&1
+    if exist "%PY_DIR%\python\python.exe" (
+        set "PYTHON_CMD=%PY_DIR%\python\python.exe"
+        call :LOG "      [ok] Python extracted to %PY_DIR%\python\"
+        goto :python_ok
+    )
+    call :LOG "      [--] Extract failed, trying other methods..."
+)
+
 :: Try installing via winget
 call :LOG "      [--] Not found. Trying winget..."
 where winget >nul 2>nul
@@ -121,7 +143,7 @@ goto :fail_python
 :fail_python
 call :LOG ""
 call :LOG "  ERROR: Cannot find or install Python."
-call :LOG "  Tried: PATH, common locations, winget, and direct download."
+call :LOG "  Tried: PATH, common locations, bundled tarball, winget, and direct download."
 call :LOG "  Install manually from https://www.python.org/downloads/"
 call :LOG "  See log: %LOG_FILE%"
 call :LOG ""

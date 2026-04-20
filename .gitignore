@@ -13,6 +13,7 @@ dist-ssr
 .superpowers/
 .venv/
 .node/
+.python/
 __pycache__/
 *.local
 
