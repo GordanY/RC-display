@@ -9,8 +9,9 @@ export default {
       },
       fontFamily: {
         sans: [
+          '"Noto Sans HK"',
+          '"PingFang TC"', '"Microsoft JhengHei"', '"Heiti TC"',
           'system-ui', '-apple-system', 'BlinkMacSystemFont',
-          '"PingFang SC"', '"Microsoft YaHei"', '"Noto Sans SC"',
           'sans-serif',
         ],
       },
