@@ -136,12 +136,7 @@ call :LOG ""
 :: =============================================
 call :LOG "[2/3] Checking Node.js..."
 
-:: Skip if frontend already built
-if exist "%~dp0dist\index.html" (
-    call :LOG "      [ok] Frontend already built, skipping Node.js."
-    goto :node_ok
-)
-
+:: Always set up Node.js — start.py may need to rebuild dist/ if source is newer.
 call npm --version >nul 2>nul
 if %ERRORLEVEL% == 0 (
     call :LOG "      [ok] Found in PATH."

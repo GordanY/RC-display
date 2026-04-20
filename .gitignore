@@ -13,7 +13,12 @@ dist-ssr
 .superpowers/
 .venv/
 .node/
+__pycache__/
 *.local
+
+# Uploaded artifact content + manifest — sync manually between machines (copy public/artifacts/).
+# The server creates public/artifacts/data.json on first write if missing.
+public/artifacts/
 
 # Editor directories and files
 .vscode/*

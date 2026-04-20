@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ExhibitData, Artifact } from '../types';
 import ArtifactForm from './ArtifactForm';
 import CreationList from './CreationList';
@@ -6,83 +6,95 @@ import { deleteFile } from './api';
 
 interface Props {
   data: ExhibitData;
-  onSave: (data: ExhibitData) => void;
+  onChange: (data: ExhibitData) => void;
 }
 
-export default function ArtifactList({ data, onSave }: Props) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+function shortId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().slice(0, 8);
+  }
+  return Math.random().toString(36).slice(2, 10);
+}
+
+export default function ArtifactList({ data, onChange }: Props) {
+  const [selectedId, setSelectedId] = useState<string | null>(data.artifacts[0]?.id ?? null);
+
+  useEffect(() => {
+    if (selectedId && !data.artifacts.some((a) => a.id === selectedId)) {
+      setSelectedId(data.artifacts[0]?.id ?? null);
+    }
+  }, [data.artifacts, selectedId]);
+
+  const selected: Artifact | null =
+    selectedId !== null ? data.artifacts.find((a) => a.id === selectedId) ?? null : null;
 
   const handleAdd = () => {
-    const id = `artifact-${Date.now()}`;
-    const newArtifact: Artifact = {
+    const id = `a-${shortId()}`;
+    const artifact: Artifact = {
       id,
-      name: { zh: '', en: '' },
-      period: { zh: '', en: '' },
-      description: { zh: '', en: '' },
-      originalPhoto: '',
+      title: '',
+      description: '',
+      model: '',
       creations: [],
     };
-    onSave({ artifacts: [...data.artifacts, newArtifact] });
-    setEditingId(id);
+    onChange({ ...data, artifacts: [...data.artifacts, artifact] });
+    setSelectedId(id);
   };
 
-  const handleUpdate = (updated: Artifact) => {
-    onSave({ artifacts: data.artifacts.map(a => (a.id === updated.id ? updated : a)) });
-    setEditingId(null);
+  const handleArtifactChange = (updated: Artifact) => {
+    onChange({
+      ...data,
+      artifacts: data.artifacts.map((a) => (a.id === updated.id ? updated : a)),
+    });
   };
 
   const handleDelete = async (id: string) => {
-    await deleteFile(id);
-    onSave({ artifacts: data.artifacts.filter(a => a.id !== id) });
-  };
-
-  const handleMove = (index: number, direction: -1 | 1) => {
-    const arr = [...data.artifacts];
-    const target = index + direction;
-    if (target < 0 || target >= arr.length) return;
-    [arr[index], arr[target]] = [arr[target], arr[index]];
-    onSave({ artifacts: arr });
+    try {
+      await deleteFile(id);
+    } catch (err) {
+      console.error('Delete artifact files failed:', err);
+    }
+    onChange({
+      ...data,
+      artifacts: data.artifacts.filter((a) => a.id !== id),
+    });
   };
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-semibold">Artifacts</h2>
-        <button onClick={handleAdd} className="px-4 py-2 bg-gold text-black rounded font-medium">
-          + Add Artifact
+    <>
+      <div className="admin-row" style={{ alignItems: 'flex-start', gap: 12 }}>
+        <div className="admin-tabs" style={{ flex: 1 }}>
+          {data.artifacts.map((a) => (
+            <button
+              key={a.id}
+              className={`tab${a.id === selectedId ? ' active' : ''}`}
+              onClick={() => setSelectedId(a.id)}
+            >
+              {a.title || '未命名'}
+            </button>
+          ))}
+        </div>
+        <button className="admin-add-tile" onClick={handleAdd} title="新增古玩">
+          +
         </button>
       </div>
 
-      {data.artifacts.map((artifact, index) => (
-        <div key={artifact.id} className="bg-gray-900 rounded-lg p-4 mb-3">
-          {editingId === artifact.id ? (
-            <ArtifactForm artifact={artifact} onSave={handleUpdate} onCancel={() => setEditingId(null)} />
-          ) : (
-            <>
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-gold font-medium">{artifact.name.zh || '(unnamed)'}</span>
-                  <span className="text-gray-500 ml-2">{artifact.name.en}</span>
-                  <span className="text-gray-600 ml-3 text-sm">{artifact.creations.length} creations</span>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => handleMove(index, -1)} className="text-gray-500 hover:text-white">&#8593;</button>
-                  <button onClick={() => handleMove(index, 1)} className="text-gray-500 hover:text-white">&#8595;</button>
-                  <button onClick={() => setEditingId(artifact.id)} className="text-blue-400 hover:text-blue-300">Edit</button>
-                  <button onClick={() => setExpandedId(expandedId === artifact.id ? null : artifact.id)} className="text-gray-400 hover:text-white">
-                    {expandedId === artifact.id ? 'Collapse' : 'Creations'}
-                  </button>
-                  <button onClick={() => handleDelete(artifact.id)} className="text-red-400 hover:text-red-300">Delete</button>
-                </div>
-              </div>
-              {expandedId === artifact.id && (
-                <CreationList artifact={artifact} onUpdate={handleUpdate} />
-              )}
-            </>
-          )}
+      {selected ? (
+        <>
+          <ArtifactForm
+            artifact={selected}
+            onChange={handleArtifactChange}
+            onDelete={() => handleDelete(selected.id)}
+          />
+          <CreationList artifact={selected} onChange={handleArtifactChange} />
+        </>
+      ) : (
+        <div className="admin-section">
+          <div style={{ color: 'var(--dim)', fontFamily: 'var(--font-mono)', fontSize: 13, letterSpacing: '0.1em' }}>
+            尚未新增藏品，點擊右上方 ＋ 新增
+          </div>
         </div>
-      ))}
-    </div>
+      )}
+    </>
   );
 }

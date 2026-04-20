@@ -1,118 +1,256 @@
-import { useState } from 'react';
-import type { Creation } from '../types';
+import { useEffect, useRef, useState } from 'react';
+import type { Creation, DisplayMode } from '../types';
 import { uploadFile } from './api';
 
 interface Props {
   creation: Creation;
   artifactId: string;
-  onSave: (creation: Creation) => void;
-  onCancel: () => void;
+  onChange: (creation: Creation) => void;
+  onDelete: () => void;
 }
 
-export default function CreationForm({ creation, artifactId, onSave, onCancel }: Props) {
-  const [form, setForm] = useState(creation);
+type UploadSlot = 'preview' | 'obj' | 'texture' | 'mtl';
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    for (const file of Array.from(files)) {
-      const path = await uploadFile(file, `${artifactId}/creations/${form.id}/photos`);
-      setForm(f => ({ ...f, photos: [...f.photos, path] }));
+export default function CreationForm({ creation, artifactId, onChange, onDelete }: Props) {
+  const [uploadingSlot, setUploadingSlot] = useState<UploadSlot | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const previewRef = useRef<HTMLInputElement>(null);
+  const objRef = useRef<HTMLInputElement>(null);
+  const textureRef = useRef<HTMLInputElement>(null);
+  const mtlRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!localPreview) return;
+    return () => URL.revokeObjectURL(localPreview);
+  }, [localPreview]);
+
+  const destDir = `${artifactId}/creations/${creation.id}`;
+
+  const uploadSlot = async (
+    slot: UploadSlot,
+    file: File,
+    validate: (f: File) => string | null,
+    apply: (path: string) => Creation,
+    inputRef: React.RefObject<HTMLInputElement | null>,
+  ) => {
+    const err = validate(file);
+    if (err) {
+      setUploadError(err);
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
+    setUploadingSlot(slot);
+    setUploadError(null);
+    try {
+      const path = await uploadFile(file, destDir);
+      onChange(apply(path));
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setUploadingSlot(null);
+      if (inputRef.current) inputRef.current.value = '';
     }
   };
 
-  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePreviewUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const path = await uploadFile(file, `${artifactId}/creations/${form.id}`);
-    setForm(f => ({ ...f, video: path }));
+    setLocalPreview(URL.createObjectURL(file));
+    uploadSlot(
+      'preview',
+      file,
+      () => null,
+      (path) => ({ ...creation, preview: path }),
+      previewRef,
+    );
   };
 
-  const [mtlUploaded, setMtlUploaded] = useState('');
-  const [texturesUploaded, setTexturesUploaded] = useState(0);
-
-  const modelDir = `${artifactId}/creations/${form.id}`;
-
-  const handleModelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleObj = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const path = await uploadFile(file, modelDir);
-    setForm(f => ({ ...f, model: path }));
+    uploadSlot(
+      'obj',
+      file,
+      (f) => (f.name.toLowerCase().endsWith('.obj') ? null : '必須是 .obj 檔案'),
+      (path) => ({ ...creation, model: path }),
+      objRef,
+    );
   };
 
-  const handleMtlUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTexture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    await uploadFile(file, modelDir);
-    setMtlUploaded(file.name);
+    uploadSlot(
+      'texture',
+      file,
+      (f) => {
+        const n = f.name.toLowerCase();
+        return n.endsWith('.jpg') || n.endsWith('.jpeg') ? null : '必須是 .jpg 貼圖檔案';
+      },
+      (path) => ({ ...creation, texture: path }),
+      textureRef,
+    );
   };
 
-  const handleTextureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    for (const file of Array.from(files)) {
-      await uploadFile(file, modelDir);
-    }
-    setTexturesUploaded(prev => prev + files.length);
+  const handleMtl = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    uploadSlot(
+      'mtl',
+      file,
+      (f) => (f.name.toLowerCase().endsWith('.mtl') ? null : '必須是 .mtl 檔案'),
+      (path) => ({ ...creation, mtl: path }),
+      mtlRef,
+    );
   };
+
+  const setDisplayMode = (mode: DisplayMode) => onChange({ ...creation, displayMode: mode });
 
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <input placeholder="Title (中文)" value={form.title.zh}
-          onChange={e => setForm(f => ({ ...f, title: { ...f.title, zh: e.target.value } }))}
-          className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm" />
-        <input placeholder="Title (English)" value={form.title.en}
-          onChange={e => setForm(f => ({ ...f, title: { ...f.title, en: e.target.value } }))}
-          className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm" />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <input placeholder="Artist (中文)" value={form.artist.zh}
-          onChange={e => setForm(f => ({ ...f, artist: { ...f.artist, zh: e.target.value } }))}
-          className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm" />
-        <input placeholder="Artist (English)" value={form.artist.en}
-          onChange={e => setForm(f => ({ ...f, artist: { ...f.artist, en: e.target.value } }))}
-          className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm" />
-      </div>
-      <textarea placeholder="Description (中文)" value={form.description.zh}
-        onChange={e => setForm(f => ({ ...f, description: { ...f.description, zh: e.target.value } }))}
-        className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm" rows={2} />
-      <textarea placeholder="Description (English)" value={form.description.en}
-        onChange={e => setForm(f => ({ ...f, description: { ...f.description, en: e.target.value } }))}
-        className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm" rows={2} />
-      <div className="grid grid-cols-2 gap-3">
+    <div className="admin-section">
+      <h3>學生作品</h3>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
         <div>
-          <label className="text-xs text-gray-400 block mb-1">Photos</label>
-          <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} className="text-gray-400 text-xs" />
-          <div className="text-xs text-gray-600 mt-1">{form.photos.length} photos</div>
+          <div className="admin-label">學生姓名</div>
+          <input
+            className="admin-input"
+            value={creation.name}
+            placeholder="例如：李小明"
+            onChange={(e) => onChange({ ...creation, name: e.target.value })}
+          />
         </div>
         <div>
-          <label className="text-xs text-gray-400 block mb-1">Video</label>
-          <input type="file" accept="video/*" onChange={handleVideoUpload} className="text-gray-400 text-xs" />
-          {form.video && <div className="text-xs text-gray-600 mt-1">uploaded</div>}
+          <div className="admin-label">學校</div>
+          <input
+            className="admin-input"
+            value={creation.school}
+            placeholder="例如：聖保羅書院"
+            onChange={(e) => onChange({ ...creation, school: e.target.value })}
+          />
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <label className="text-xs text-gray-400 block mb-1">3D Model (.obj)</label>
-          <input type="file" accept=".obj" onChange={handleModelUpload} className="text-gray-400 text-xs" />
-          {form.model && <div className="text-xs text-gray-600 mt-1">uploaded</div>}
-        </div>
-        <div>
-          <label className="text-xs text-gray-400 block mb-1">Material (.mtl)</label>
-          <input type="file" accept=".mtl" onChange={handleMtlUpload} className="text-gray-400 text-xs" />
-          {mtlUploaded && <div className="text-xs text-gray-600 mt-1">{mtlUploaded}</div>}
-        </div>
-        <div>
-          <label className="text-xs text-gray-400 block mb-1">Textures</label>
-          <input type="file" accept="image/*" multiple onChange={handleTextureUpload} className="text-gray-400 text-xs" />
-          {texturesUploaded > 0 && <div className="text-xs text-gray-600 mt-1">{texturesUploaded} uploaded</div>}
+
+      <div style={{ marginBottom: 16 }}>
+        <div className="admin-label">顯示方式（右下角）</div>
+        <div className="admin-radio-group">
+          <label className={creation.displayMode === 'name-school' ? 'active' : ''}>
+            <input
+              type="radio"
+              name={`dm-${creation.id}`}
+              checked={creation.displayMode === 'name-school'}
+              onChange={() => setDisplayMode('name-school')}
+            />
+            姓名（大）／學校（小）
+          </label>
+          <label className={creation.displayMode === 'school-name' ? 'active' : ''}>
+            <input
+              type="radio"
+              name={`dm-${creation.id}`}
+              checked={creation.displayMode === 'school-name'}
+              onChange={() => setDisplayMode('school-name')}
+            />
+            學校（大）／姓名（小）
+          </label>
         </div>
       </div>
-      <div className="flex gap-2 pt-2">
-        <button onClick={() => onSave(form)} className="px-3 py-1 bg-gold text-black rounded text-sm">Save</button>
-        <button onClick={onCancel} className="px-3 py-1 bg-gray-700 text-gray-300 rounded text-sm">Cancel</button>
+
+      <div style={{ marginBottom: 16 }}>
+        <div className="admin-label">縮圖（預覽圖片）</div>
+        <div className="file-row">
+          {localPreview || creation.preview ? (
+            <img
+              className="preview-thumb"
+              src={localPreview ?? `/artifacts/${creation.preview}`}
+              alt=""
+            />
+          ) : (
+            <div className="preview-thumb" />
+          )}
+          <input
+            ref={previewRef}
+            type="file"
+            accept="image/*"
+            onChange={handlePreviewUpload}
+            style={{ color: 'var(--muted)', fontSize: 13 }}
+          />
+          {uploadingSlot === 'preview' && <span style={{ color: 'var(--amber)', fontSize: 13 }}>上傳中…</span>}
+        </div>
+        {creation.preview && <div className="file-path">{creation.preview}</div>}
       </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <div className="admin-label">3D 模型檔案</div>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <UploadRow
+            label="OBJ 模型（必須）"
+            accept=".obj"
+            inputRef={objRef}
+            onChange={handleObj}
+            uploading={uploadingSlot === 'obj'}
+            currentPath={creation.model}
+          />
+          <UploadRow
+            label="貼圖 JPG（若無 MTL 則必須）"
+            accept=".jpg,.jpeg,image/jpeg"
+            inputRef={textureRef}
+            onChange={handleTexture}
+            uploading={uploadingSlot === 'texture'}
+            currentPath={creation.texture}
+          />
+          <UploadRow
+            label="MTL 材質（可選）"
+            accept=".mtl"
+            inputRef={mtlRef}
+            onChange={handleMtl}
+            uploading={uploadingSlot === 'mtl'}
+            currentPath={creation.mtl}
+          />
+          {uploadError && <span style={{ color: 'var(--danger)', fontSize: 13 }}>{uploadError}</span>}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 20 }}>
+        <button
+          className="admin-btn danger"
+          onClick={() => {
+            if (window.confirm(`刪除「${creation.name || '未命名'}」的作品？此操作會同時移除相關檔案。`)) {
+              onDelete();
+            }
+          }}
+        >
+          刪除此學生作品
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface UploadRowProps {
+  label: string;
+  accept: string;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  uploading: boolean;
+  currentPath?: string;
+}
+
+function UploadRow({ label, accept, inputRef, onChange, uploading, currentPath }: UploadRowProps) {
+  return (
+    <div className="file-row" style={{ alignItems: 'flex-start', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13, color: 'var(--muted)', minWidth: 180 }}>{label}</span>
+        <input
+          ref={inputRef}
+          type="file"
+          accept={accept}
+          onChange={onChange}
+          style={{ color: 'var(--muted)', fontSize: 13 }}
+        />
+        {uploading && <span style={{ color: 'var(--amber)', fontSize: 13 }}>上傳中…</span>}
+      </div>
+      {currentPath && <div className="file-path">{currentPath}</div>}
     </div>
   );
 }

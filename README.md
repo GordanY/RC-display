@@ -70,6 +70,18 @@ npm run dev      # frontend only
 npm run server   # backend only
 ```
 
+### Transferring to Another PC
+
+Source code lives in git; **uploaded content does not**. `public/artifacts/` (3D models, textures, student creations, and the `data.json` manifest) is gitignored and must be copied out-of-band.
+
+To set up another PC:
+
+1. `git clone` the repo (or `git pull` if it already exists)
+2. Copy `public/artifacts/` from the source PC via USB / rsync / network share
+3. Run `start.bat` (Windows) or `./start.sh` (macOS/Linux) — it will auto-install Python, Node.js, and project dependencies on first run (requires internet), then build and launch
+
+On subsequent runs, start-up is offline-capable. When source code changes (e.g. after `git pull`), `start.py` detects the staleness and rebuilds the frontend automatically.
+
 ## React Compiler
 
 The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).

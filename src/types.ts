@@ -1,32 +1,27 @@
-export interface BilingualText {
-  zh: string;
-  en: string;
-}
+export type DisplayMode = 'name-school' | 'school-name';
 
 export interface Creation {
   id: string;
-  title: BilingualText;
-  artist: BilingualText;
-  description: BilingualText;
-  photos: string[];
-  video?: string;
-  model?: string;
+  name: string;
+  school: string;
+  displayMode: DisplayMode;
+  preview: string;
+  model: string;
+  texture?: string;
+  mtl?: string;
 }
 
 export interface Artifact {
   id: string;
-  name: BilingualText;
-  period: BilingualText;
-  description: BilingualText;
-  originalPhoto: string;
-  model?: string;
+  title: string;
+  description: string;
+  model: string;
+  texture?: string;
+  mtl?: string;
   creations: Creation[];
 }
 
 export interface ExhibitData {
+  exhibitTitle: string;
   artifacts: Artifact[];
 }
-
-export type Language = 'zh' | 'en';
-
-export type ContentView = 'info' | 'model' | 'comparison' | 'video';

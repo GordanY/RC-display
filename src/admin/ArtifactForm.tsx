@@ -1,99 +1,182 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Artifact } from '../types';
 import { uploadFile } from './api';
 
 interface Props {
   artifact: Artifact;
-  onSave: (artifact: Artifact) => void;
-  onCancel: () => void;
+  onChange: (artifact: Artifact) => void;
+  onDelete: () => void;
 }
 
-export default function ArtifactForm({ artifact, onSave, onCancel }: Props) {
-  const [form, setForm] = useState(artifact);
+type UploadSlot = 'obj' | 'texture' | 'mtl';
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const path = await uploadFile(file, form.id);
-    setForm(f => ({ ...f, originalPhoto: path }));
-  };
+export default function ArtifactForm({ artifact, onChange, onDelete }: Props) {
+  const [uploadingSlot, setUploadingSlot] = useState<UploadSlot | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const objRef = useRef<HTMLInputElement>(null);
+  const textureRef = useRef<HTMLInputElement>(null);
+  const mtlRef = useRef<HTMLInputElement>(null);
 
-  const [mtlUploaded, setMtlUploaded] = useState('');
-  const [texturesUploaded, setTexturesUploaded] = useState(0);
-
-  const handleModelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const path = await uploadFile(file, form.id);
-    setForm(f => ({ ...f, model: path }));
-  };
-
-  const handleMtlUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await uploadFile(file, form.id);
-    setMtlUploaded(file.name);
-  };
-
-  const handleTextureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    for (const file of Array.from(files)) {
-      await uploadFile(file, form.id);
+  const uploadSlot = async (
+    slot: UploadSlot,
+    file: File,
+    validate: (f: File) => string | null,
+    apply: (path: string) => Artifact,
+    inputRef: React.RefObject<HTMLInputElement | null>,
+  ) => {
+    const err = validate(file);
+    if (err) {
+      setUploadError(err);
+      if (inputRef.current) inputRef.current.value = '';
+      return;
     }
-    setTexturesUploaded(prev => prev + files.length);
+    setUploadingSlot(slot);
+    setUploadError(null);
+    try {
+      const path = await uploadFile(file, artifact.id);
+      onChange(apply(path));
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setUploadingSlot(null);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  const handleObj = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    uploadSlot(
+      'obj',
+      file,
+      (f) => (f.name.toLowerCase().endsWith('.obj') ? null : '必須是 .obj 檔案'),
+      (path) => ({ ...artifact, model: path }),
+      objRef,
+    );
+  };
+
+  const handleTexture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    uploadSlot(
+      'texture',
+      file,
+      (f) => {
+        const n = f.name.toLowerCase();
+        return n.endsWith('.jpg') || n.endsWith('.jpeg') ? null : '必須是 .jpg 貼圖檔案';
+      },
+      (path) => ({ ...artifact, texture: path }),
+      textureRef,
+    );
+  };
+
+  const handleMtl = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    uploadSlot(
+      'mtl',
+      file,
+      (f) => (f.name.toLowerCase().endsWith('.mtl') ? null : '必須是 .mtl 檔案'),
+      (path) => ({ ...artifact, mtl: path }),
+      mtlRef,
+    );
   };
 
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <input placeholder="Name (中文)" value={form.name.zh}
-          onChange={e => setForm(f => ({ ...f, name: { ...f.name, zh: e.target.value } }))}
-          className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white" />
-        <input placeholder="Name (English)" value={form.name.en}
-          onChange={e => setForm(f => ({ ...f, name: { ...f.name, en: e.target.value } }))}
-          className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white" />
+    <div className="admin-section">
+      <h3>古玩藏品</h3>
+
+      <div style={{ marginBottom: 16 }}>
+        <div className="admin-label">名稱</div>
+        <input
+          className="admin-input"
+          value={artifact.title}
+          placeholder="例如：青花瓷"
+          onChange={(e) => onChange({ ...artifact, title: e.target.value })}
+        />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <input placeholder="Period (中文)" value={form.period.zh}
-          onChange={e => setForm(f => ({ ...f, period: { ...f.period, zh: e.target.value } }))}
-          className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white" />
-        <input placeholder="Period (English)" value={form.period.en}
-          onChange={e => setForm(f => ({ ...f, period: { ...f.period, en: e.target.value } }))}
-          className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white" />
+
+      <div style={{ marginBottom: 16 }}>
+        <div className="admin-label">介紹</div>
+        <textarea
+          className="admin-textarea"
+          value={artifact.description}
+          placeholder="藏品介紹內容..."
+          onChange={(e) => onChange({ ...artifact, description: e.target.value })}
+        />
       </div>
-      <textarea placeholder="Description (中文)" value={form.description.zh}
-        onChange={e => setForm(f => ({ ...f, description: { ...f.description, zh: e.target.value } }))}
-        className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white" rows={3} />
-      <textarea placeholder="Description (English)" value={form.description.en}
-        onChange={e => setForm(f => ({ ...f, description: { ...f.description, en: e.target.value } }))}
-        className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white" rows={3} />
-      <div>
-        <label className="text-sm text-gray-400 block mb-1">Original Photo</label>
-        <input type="file" accept="image/*" onChange={handlePhotoUpload} className="text-gray-400 text-sm" />
-        {form.originalPhoto && <div className="text-gray-500 text-xs mt-1">{form.originalPhoto}</div>}
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <label className="text-sm text-gray-400 block mb-1">3D Model (.obj)</label>
-          <input type="file" accept=".obj" onChange={handleModelUpload} className="text-gray-400 text-sm" />
-          {form.model && <div className="text-gray-500 text-xs mt-1">{form.model}</div>}
+
+      <div style={{ marginBottom: 16 }}>
+        <div className="admin-label">3D 模型檔案</div>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <UploadRow
+            label="OBJ 模型（必須）"
+            accept=".obj"
+            inputRef={objRef}
+            onChange={handleObj}
+            uploading={uploadingSlot === 'obj'}
+            currentPath={artifact.model}
+          />
+          <UploadRow
+            label="貼圖 JPG（若無 MTL 則必須）"
+            accept=".jpg,.jpeg,image/jpeg"
+            inputRef={textureRef}
+            onChange={handleTexture}
+            uploading={uploadingSlot === 'texture'}
+            currentPath={artifact.texture}
+          />
+          <UploadRow
+            label="MTL 材質（可選）"
+            accept=".mtl"
+            inputRef={mtlRef}
+            onChange={handleMtl}
+            uploading={uploadingSlot === 'mtl'}
+            currentPath={artifact.mtl}
+          />
+          {uploadError && <span style={{ color: 'var(--danger)', fontSize: 13 }}>{uploadError}</span>}
         </div>
-        <div>
-          <label className="text-sm text-gray-400 block mb-1">Material (.mtl)</label>
-          <input type="file" accept=".mtl" onChange={handleMtlUpload} className="text-gray-400 text-sm" />
-          {mtlUploaded && <div className="text-gray-500 text-xs mt-1">{mtlUploaded}</div>}
-        </div>
-        <div>
-          <label className="text-sm text-gray-400 block mb-1">Textures</label>
-          <input type="file" accept="image/*" multiple onChange={handleTextureUpload} className="text-gray-400 text-sm" />
-          {texturesUploaded > 0 && <div className="text-gray-500 text-xs mt-1">{texturesUploaded} uploaded</div>}
-        </div>
       </div>
-      <div className="flex gap-2 pt-2">
-        <button onClick={() => onSave(form)} className="px-4 py-2 bg-gold text-black rounded">Save</button>
-        <button onClick={onCancel} className="px-4 py-2 bg-gray-700 text-gray-300 rounded">Cancel</button>
+
+      <div style={{ marginTop: 20 }}>
+        <button
+          className="admin-btn danger"
+          onClick={() => {
+            if (window.confirm(`刪除「${artifact.title || '未命名'}」？此操作會同時移除相關檔案。`)) {
+              onDelete();
+            }
+          }}
+        >
+          刪除此藏品
+        </button>
       </div>
+    </div>
+  );
+}
+
+interface UploadRowProps {
+  label: string;
+  accept: string;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  uploading: boolean;
+  currentPath?: string;
+}
+
+function UploadRow({ label, accept, inputRef, onChange, uploading, currentPath }: UploadRowProps) {
+  return (
+    <div className="file-row" style={{ alignItems: 'flex-start', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13, color: 'var(--muted)', minWidth: 180 }}>{label}</span>
+        <input
+          ref={inputRef}
+          type="file"
+          accept={accept}
+          onChange={onChange}
+          style={{ color: 'var(--muted)', fontSize: 13 }}
+        />
+        {uploading && <span style={{ color: 'var(--amber)', fontSize: 13 }}>上傳中…</span>}
+      </div>
+      {currentPath && <div className="file-path">{currentPath}</div>}
     </div>
   );
 }

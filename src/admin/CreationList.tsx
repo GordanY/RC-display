@@ -1,70 +1,155 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Artifact, Creation } from '../types';
 import CreationForm from './CreationForm';
 import { deleteFile } from './api';
 
 interface Props {
   artifact: Artifact;
-  onUpdate: (artifact: Artifact) => void;
+  onChange: (artifact: Artifact) => void;
 }
 
-export default function CreationList({ artifact, onUpdate }: Props) {
-  const [editingId, setEditingId] = useState<string | null>(null);
+function shortId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().slice(0, 8);
+  }
+  return Math.random().toString(36).slice(2, 10);
+}
 
-  const handleAdd = () => {
-    const id = `creation-${Date.now()}`;
-    const newCreation: Creation = {
-      id, title: { zh: '', en: '' }, artist: { zh: '', en: '' },
-      description: { zh: '', en: '' }, photos: [],
-    };
-    onUpdate({ ...artifact, creations: [...artifact.creations, newCreation] });
-    setEditingId(id);
+export default function CreationList({ artifact, onChange }: Props) {
+  const [selectedId, setSelectedId] = useState<string | null>(
+    artifact.creations[0]?.id ?? null,
+  );
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+
+  const handleDragStart = (e: React.DragEvent<HTMLButtonElement>, id: string) => {
+    setDraggingId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
   };
 
-  const handleSave = (updated: Creation) => {
-    onUpdate({ ...artifact, creations: artifact.creations.map(c => (c.id === updated.id ? updated : c)) });
-    setEditingId(null);
+  const handleDragOver = (e: React.DragEvent<HTMLButtonElement>, id: string) => {
+    if (!draggingId || draggingId === id) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (overId !== id) setOverId(id);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLButtonElement>, targetId: string) => {
+    e.preventDefault();
+    const sourceId = draggingId ?? e.dataTransfer.getData('text/plain');
+    setDraggingId(null);
+    setOverId(null);
+    if (!sourceId || sourceId === targetId) return;
+    const list = artifact.creations;
+    const from = list.findIndex((c) => c.id === sourceId);
+    const to = list.findIndex((c) => c.id === targetId);
+    if (from < 0 || to < 0) return;
+    const next = list.slice();
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onChange({ ...artifact, creations: next });
+  };
+
+  const handleDragEnd = () => {
+    setDraggingId(null);
+    setOverId(null);
+  };
+
+  useEffect(() => {
+    if (selectedId && !artifact.creations.some((c) => c.id === selectedId)) {
+      setSelectedId(artifact.creations[0]?.id ?? null);
+    }
+  }, [artifact.creations, selectedId]);
+
+  const selected: Creation | null =
+    selectedId !== null ? artifact.creations.find((c) => c.id === selectedId) ?? null : null;
+
+  const handleAdd = () => {
+    const id = `c-${shortId()}`;
+    const creation: Creation = {
+      id,
+      name: '',
+      school: '',
+      displayMode: 'name-school',
+      preview: '',
+      model: '',
+    };
+    onChange({ ...artifact, creations: [...artifact.creations, creation] });
+    setSelectedId(id);
+  };
+
+  const handleCreationChange = (updated: Creation) => {
+    onChange({
+      ...artifact,
+      creations: artifact.creations.map((c) => (c.id === updated.id ? updated : c)),
+    });
   };
 
   const handleDelete = async (id: string) => {
-    await deleteFile(`${artifact.id}/creations/${id}`);
-    onUpdate({ ...artifact, creations: artifact.creations.filter(c => c.id !== id) });
-  };
-
-  const handleMove = (index: number, direction: -1 | 1) => {
-    const arr = [...artifact.creations];
-    const target = index + direction;
-    if (target < 0 || target >= arr.length) return;
-    [arr[index], arr[target]] = [arr[target], arr[index]];
-    onUpdate({ ...artifact, creations: arr });
+    try {
+      await deleteFile(`${artifact.id}/creations/${id}`);
+    } catch (err) {
+      console.error('Delete creation files failed:', err);
+    }
+    onChange({
+      ...artifact,
+      creations: artifact.creations.filter((c) => c.id !== id),
+    });
   };
 
   return (
-    <div className="mt-4 pl-4 border-l-2 border-gray-800">
-      <div className="flex justify-between items-center mb-3">
-        <h3 className="text-sm font-medium text-gray-300">Student Creations</h3>
-        <button onClick={handleAdd} className="px-3 py-1 bg-gold/20 text-gold rounded text-sm">+ Add Creation</button>
+    <div className="admin-section" style={{ marginTop: 20 }}>
+      <h3>學生作品列表</h3>
+
+      <div className="thumbs" style={{ marginBottom: 16 }}>
+        {artifact.creations.map((c) => {
+          const classes = ['thumb'];
+          if (c.id === selectedId) classes.push('active');
+          if (c.id === draggingId) classes.push('dragging');
+          if (c.id === overId) classes.push('drop-target');
+          return (
+            <button
+              key={c.id}
+              className={classes.join(' ')}
+              onClick={() => setSelectedId(c.id)}
+              draggable
+              onDragStart={(e) => handleDragStart(e, c.id)}
+              onDragOver={(e) => handleDragOver(e, c.id)}
+              onDragLeave={() => overId === c.id && setOverId(null)}
+              onDrop={(e) => handleDrop(e, c.id)}
+              onDragEnd={handleDragEnd}
+            >
+              <div className="thumb-tile">
+                {c.preview ? <img src={`/artifacts/${c.preview}`} alt={c.name} /> : null}
+              </div>
+              <span className="thumb-name">{c.name || '未命名'}</span>
+            </button>
+          );
+        })}
+        <button
+          className="admin-add-tile"
+          style={{ width: 168, height: 128 }}
+          onClick={handleAdd}
+          title="新增學生作品"
+        >
+          +
+        </button>
       </div>
-      {artifact.creations.map((creation, index) => (
-        <div key={creation.id} className="bg-gray-800/50 rounded p-3 mb-2">
-          {editingId === creation.id ? (
-            <CreationForm creation={creation} artifactId={artifact.id} onSave={handleSave} onCancel={() => setEditingId(null)} />
-          ) : (
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-gold text-sm">{creation.title.zh || '(unnamed)'}</span>
-                <span className="text-gray-500 text-sm ml-2">{creation.artist.zh}</span>
-              </div>
-              <div className="flex gap-2 text-sm">
-                <button onClick={() => handleMove(index, -1)} className="text-gray-500 hover:text-white">&#8593;</button>
-                <button onClick={() => handleMove(index, 1)} className="text-gray-500 hover:text-white">&#8595;</button>
-                <button onClick={() => setEditingId(creation.id)} className="text-blue-400">Edit</button>
-                <button onClick={() => handleDelete(creation.id)} className="text-red-400">Delete</button>
-              </div>
-            </div>
-          )}
+
+      {selected ? (
+        <CreationForm
+          key={selected.id}
+          creation={selected}
+          artifactId={artifact.id}
+          onChange={handleCreationChange}
+          onDelete={() => handleDelete(selected.id)}
+        />
+      ) : (
+        <div style={{ color: 'var(--dim)', fontFamily: 'var(--font-mono)', fontSize: 13, letterSpacing: '0.1em' }}>
+          尚未新增學生作品
         </div>
-      ))}
+      )}
     </div>
   );
 }

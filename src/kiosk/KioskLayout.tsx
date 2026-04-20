@@ -1,116 +1,117 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useExhibitData } from '../hooks/useExhibitData';
 import { useIdleTimeout } from '../hooks/useIdleTimeout';
-import { useLanguage } from '../context/LanguageContext';
 import ArtifactTabs from './ArtifactTabs';
-import CreationPills from './CreationPills';
-import InfoView from './InfoView';
-import ModelView from './ModelView';
-import ComparisonView from './ComparisonView';
-import VideoView from './VideoView';
-import type { ContentView } from '../types';
+import StudentThumbs from './StudentThumbs';
+import Canvas3D from './Canvas3D';
+import type { Artifact, Creation } from '../types';
 
 export default function KioskLayout() {
   const { data, loading, error } = useExhibitData();
-  const { language, toggleLanguage } = useLanguage();
-  const [activeArtifactId, setActiveArtifactId] = useState<string>('');
-  const [activeCreationId, setActiveCreationId] = useState<string>('');
-  const [contentView, setContentView] = useState<ContentView>('info');
+  const [artifactId, setArtifactId] = useState<string>('');
+  const [creationId, setCreationId] = useState<string | null>(null);
 
   const resetToDefault = useCallback(() => {
     if (data && data.artifacts.length > 0) {
-      setActiveArtifactId(data.artifacts[0].id);
-      setActiveCreationId(data.artifacts[0].creations[0]?.id ?? '');
-      setContentView('info');
+      setArtifactId(data.artifacts[0].id);
+      setCreationId(null);
     }
   }, [data]);
 
-  useIdleTimeout(resetToDefault, 60000);
+  useIdleTimeout(resetToDefault, 60_000);
 
-  // Set initial selection when data loads
-  if (data && !activeArtifactId && data.artifacts.length > 0) {
-    setActiveArtifactId(data.artifacts[0].id);
-    setActiveCreationId(data.artifacts[0].creations[0]?.id ?? '');
+  useEffect(() => {
+    if (data && !artifactId && data.artifacts.length > 0) {
+      setArtifactId(data.artifacts[0].id);
+    }
+  }, [data, artifactId]);
+
+  if (loading) return <div className="kiosk-state">Loading…</div>;
+  if (error || !data) return <div className="kiosk-state">Error: {error ?? 'unknown'}</div>;
+
+  if (data.artifacts.length === 0) {
+    return (
+      <KioskFrame>
+        <h1 className="exhibit-title">{data.exhibitTitle || '展覽'}</h1>
+        <div className="kiosk-state" style={{ minHeight: 0, marginTop: 120 }}>
+          尚未新增藏品
+        </div>
+      </KioskFrame>
+    );
   }
 
-  if (loading) {
-    return <div className="bg-black h-screen flex items-center justify-center text-gold">Loading...</div>;
-  }
+  const artifact: Artifact =
+    data.artifacts.find((a) => a.id === artifactId) ?? data.artifacts[0];
+  const creation: Creation | null =
+    creationId !== null ? artifact.creations.find((c) => c.id === creationId) ?? null : null;
 
-  if (error || !data) {
-    return <div className="bg-black h-screen flex items-center justify-center text-red-500">Error: {error}</div>;
-  }
-
-  const activeArtifact = data.artifacts.find(a => a.id === activeArtifactId);
-  const activeCreation = activeArtifact?.creations.find(c => c.id === activeCreationId);
-
-  const handleArtifactSelect = (id: string) => {
-    setActiveArtifactId(id);
-    const artifact = data.artifacts.find(a => a.id === id);
-    setActiveCreationId(artifact?.creations[0]?.id ?? '');
-    setContentView('info');
+  const handleArtifact = (id: string) => {
+    setArtifactId(id);
+    setCreationId(null);
+  };
+  const handleCreation = (id: string) => {
+    setCreationId((prev) => (prev === id ? null : id));
   };
 
+  const source = creation?.model ? creation : artifact;
+  const modelPath = source.model || '';
+  const texturePath = source.texture;
+  const mtlPath = source.mtl;
+  const footer = creation
+    ? { name: creation.name, school: creation.school, displayMode: creation.displayMode }
+    : null;
+
   return (
-    <div className="bg-black h-screen w-screen flex flex-col" style={{ maxWidth: 1080, maxHeight: 1920 }}>
-      {/* Navigation — top */}
-      <ArtifactTabs
-        artifacts={data.artifacts}
-        activeId={activeArtifactId}
-        onSelect={handleArtifactSelect}
+    <KioskFrame>
+      <h1 className="exhibit-title">{data.exhibitTitle || '展覽'}</h1>
+      <ArtifactTabs artifacts={data.artifacts} activeId={artifact.id} onSelect={handleArtifact} />
+      <Canvas3D
+        modelPath={modelPath}
+        texturePath={texturePath}
+        mtlPath={mtlPath}
+        footer={footer}
       />
-
-      {activeArtifact && (
-        <CreationPills
-          creations={activeArtifact.creations}
-          activeId={activeCreationId}
-          onSelect={(id) => { setActiveCreationId(id); setContentView('info'); }}
+      <div className="section">
+        <div className="section-label">學生作品</div>
+        <StudentThumbs
+          creations={artifact.creations}
+          activeId={creationId}
+          onSelect={handleCreation}
         />
-      )}
-
-      {/* Language toggle */}
-      <div className="flex justify-end px-4 py-1">
-        <button
-          onClick={toggleLanguage}
-          className="text-xs px-3 py-1 rounded bg-gray-900 text-gold min-h-[44px] min-w-[44px]"
-        >
-          {language === 'zh' ? '中/EN' : 'EN/中'}
-        </button>
       </div>
-
-      {/* Content area — upper portion */}
-      <div className="flex-1 overflow-hidden px-4 pb-2">
-        {activeCreation && activeArtifact ? (
-          contentView === 'info' ? (
-            <InfoView
-              creation={activeCreation}
-              artifact={activeArtifact}
-              onViewChange={setContentView}
-            />
-          ) : contentView === 'model' && (activeCreation.model || activeArtifact.model) ? (
-            <ModelView modelPath={activeCreation.model || activeArtifact.model!} onClose={() => setContentView('info')} />
-          ) : contentView === 'comparison' ? (
-            <ComparisonView
-              originalPhoto={activeArtifact.originalPhoto}
-              creationPhoto={activeCreation.photos[0] ?? ''}
-              onClose={() => setContentView('info')}
-            />
-          ) : contentView === 'video' && activeCreation.video ? (
-            <VideoView videoPath={activeCreation.video} onClose={() => setContentView('info')} />
-          ) : (
-            <InfoView
-              creation={activeCreation}
-              artifact={activeArtifact}
-              onViewChange={setContentView}
-            />
-          )
-        ) : (
-          <div className="text-gray-500">No creation selected</div>
-        )}
+      <div className="section">
+        <div className="section-label">古玩藏品介紹</div>
+        <div className="description">{artifact.description || ''}</div>
       </div>
+    </KioskFrame>
+  );
+}
 
-      {/* Lower half — pure black / transparent zone */}
-      <div className="h-1/2 bg-black" />
+function KioskFrame({ children }: { children: React.ReactNode }) {
+  const [wrap, setWrap] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!wrap) return;
+    const fit = () => {
+      const availableH = window.innerHeight - 40;
+      const availableW = window.innerWidth - 40;
+      const scale = Math.min(1, availableH / 1920, availableW / 1080);
+      wrap.style.transform = `scale(${scale})`;
+      wrap.style.width = `${1080 * scale}px`;
+      wrap.style.height = `${1920 * scale}px`;
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [wrap]);
+
+  return (
+    <div className="kiosk-page">
+      <div className="kiosk-wrap" ref={setWrap}>
+        <div className="kiosk">
+          <div className="content">{children}</div>
+        </div>
+      </div>
     </div>
   );
 }

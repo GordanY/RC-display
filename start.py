@@ -36,7 +36,8 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-PORT = 8080
+DEFAULT_PORT = 8080
+PORT_SEARCH_RANGE = 20
 HOST = "127.0.0.1"
 BASE_DIR = Path(__file__).resolve().parent
 DIST_DIR = BASE_DIR / "dist"
@@ -122,6 +123,87 @@ def pause_and_exit(code=1):
 
 
 # ---------------------------------------------------------------------------
+# Network + port helpers
+# ---------------------------------------------------------------------------
+def has_internet(timeout=3):
+    """True if we can open a TCP connection to a well-known DNS server."""
+    import socket
+    for host in ("1.1.1.1", "8.8.8.8"):
+        try:
+            with socket.create_connection((host, 53), timeout=timeout):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def warn_if_offline(reason):
+    """Print a prominent warning when we're about to do something that needs internet."""
+    if has_internet():
+        return
+    log.warning("")
+    log.warning("=" * 60)
+    log.warning(f"  [warn] No internet connection detected.")
+    log.warning(f"  Needed for: {reason}")
+    log.warning(f"  Connect to the internet and re-run if this step fails.")
+    log.warning("=" * 60)
+    log.warning("")
+
+
+def find_available_port(start=DEFAULT_PORT, attempts=PORT_SEARCH_RANGE):
+    """Return the first bindable port starting at `start`, or None if none free."""
+    import socket
+    for port in range(start, start + attempts):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind((HOST, port))
+                return port
+            except OSError:
+                continue
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Build staleness detection
+# ---------------------------------------------------------------------------
+def should_rebuild_frontend():
+    """True if dist/ is missing or any watched source is newer than dist/index.html."""
+    dist_index = DIST_DIR / "index.html"
+    if not dist_index.exists():
+        return True
+    try:
+        dist_mtime = dist_index.stat().st_mtime
+    except OSError:
+        return True
+
+    watched = [
+        BASE_DIR / "src",
+        BASE_DIR / "index.html",
+        BASE_DIR / "package.json",
+        BASE_DIR / "package-lock.json",
+        BASE_DIR / "vite.config.ts",
+        BASE_DIR / "tailwind.config.js",
+        BASE_DIR / "postcss.config.js",
+        BASE_DIR / "tsconfig.json",
+        BASE_DIR / "tsconfig.app.json",
+    ]
+    for path in watched:
+        if not path.exists():
+            continue
+        try:
+            if path.is_file():
+                if path.stat().st_mtime > dist_mtime:
+                    return True
+            else:
+                for f in path.rglob("*"):
+                    if f.is_file() and f.stat().st_mtime > dist_mtime:
+                        return True
+        except OSError:
+            continue
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Auto-create venv and install Flask if needed
 # ---------------------------------------------------------------------------
 def ensure_venv_and_flask():
@@ -163,6 +245,7 @@ def ensure_venv_and_flask():
         capture_output=True,
     )
     if result.returncode != 0:
+        warn_if_offline("installing Flask via pip")
         log.info("[setup] Installing Flask...")
         if os.name == "nt":
             pip = VENV_DIR / "Scripts" / "pip.exe"
@@ -242,11 +325,14 @@ def ensure_node():
 # Build frontend if dist/ is missing
 # ---------------------------------------------------------------------------
 def ensure_frontend_built():
-    """Run npm install + npm run build if dist/ doesn't exist."""
-    if DIST_DIR.exists():
+    """Run npm install + npm run build if dist/ is missing or stale."""
+    if not should_rebuild_frontend():
         return
 
-    log.info("[build] 'dist/' not found - building frontend...")
+    if DIST_DIR.exists():
+        log.info("[build] Source files changed since last build - rebuilding frontend...")
+    else:
+        log.info("[build] 'dist/' not found - building frontend...")
     log.info("")
 
     # Check if package.json exists (are we in the full project?)
@@ -263,6 +349,9 @@ def ensure_frontend_built():
 
     # Ensure Node.js is available
     ensure_node()
+
+    # Warn once if offline — both npm install and npm run build download deps on first run
+    warn_if_offline("running `npm install` to fetch frontend dependencies")
 
     # On Windows, npm is a .cmd script and needs shell=True
     use_shell = os.name == "nt"
@@ -309,14 +398,11 @@ def ensure_frontend_built():
 def check_prerequisites():
     ensure_frontend_built()
 
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
     if not DATA_FILE.exists():
-        log.error("=" * 60)
-        log.error("ERROR: 'public/artifacts/data.json' not found.")
-        log.error("")
-        log.error("Make sure the 'public/artifacts/' directory exists")
-        log.error("with at least a data.json file.")
-        log.error("=" * 60)
-        pause_and_exit(1)
+        log.info("[setup] No data.json found — creating empty manifest.")
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump({"exhibitTitle": "", "artifacts": []}, f, ensure_ascii=False, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -468,11 +554,11 @@ def create_app():
 # ---------------------------------------------------------------------------
 # Open browser after short delay
 # ---------------------------------------------------------------------------
-def open_browser():
+def open_browser(port):
     import time
 
     time.sleep(1.5)
-    url = f"http://localhost:{PORT}"
+    url = f"http://localhost:{port}"
     log.info(f"[browser] Opening {url}")
     webbrowser.open(url)
 
@@ -499,21 +585,31 @@ def main():
 
     app = create_app()
 
+    port = find_available_port()
+    if port is None:
+        log.error("=" * 60)
+        log.error(f"  ERROR: No free port in range {DEFAULT_PORT}-{DEFAULT_PORT + PORT_SEARCH_RANGE - 1}.")
+        log.error("  Close other apps using these ports and try again.")
+        log.error("=" * 60)
+        pause_and_exit(1)
+    if port != DEFAULT_PORT:
+        log.info(f"[port] Port {DEFAULT_PORT} is in use — falling back to {port}.")
+
     log.info(f"[server] Serving frontend from: {DIST_DIR}")
     log.info(f"[server] Serving artifacts from: {ARTIFACTS_DIR}")
     log.info("")
-    log.info(f"  Kiosk Display:  http://localhost:{PORT}/")
-    log.info(f"  Admin Panel:    http://localhost:{PORT}/admin")
+    log.info(f"  Kiosk Display:  http://localhost:{port}/")
+    log.info(f"  Admin Panel:    http://localhost:{port}/admin")
     log.info("")
     log.info("  Press Ctrl+C to stop the server.")
     log.info("=" * 60)
     log.info("")
 
     # Open browser in a background thread
-    threading.Thread(target=open_browser, daemon=True).start()
+    threading.Thread(target=open_browser, args=(port,), daemon=True).start()
 
     # Start Flask server
-    app.run(host=HOST, port=PORT, debug=False)
+    app.run(host=HOST, port=port, debug=False)
 
 
 if __name__ == "__main__":
