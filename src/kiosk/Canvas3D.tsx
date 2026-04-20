@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState, type RefObject } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
@@ -14,6 +14,7 @@ import {
   type Material,
   type Mesh,
 } from 'three';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { ErrorBoundary } from './ErrorBoundary';
 import type { DisplayMode } from '../types';
 
@@ -71,14 +72,17 @@ function RotatingModel({
   path,
   texturePath,
   mtlPath,
+  rotating,
+  modelRef,
 }: {
   path: string;
   texturePath?: string;
   mtlPath?: string;
+  rotating: boolean;
+  modelRef: RefObject<Group | null>;
 }) {
   const [scene, setScene] = useState<Group | null>(null);
   const [loadError, setLoadError] = useState<Error | null>(null);
-  const ref = useRef<Group>(null);
 
   useEffect(() => {
     let aborted = false;
@@ -143,15 +147,15 @@ function RotatingModel({
   }, [path, texturePath, mtlPath]);
 
   useFrame((_, delta) => {
-    if (ref.current) {
-      ref.current.rotation.y += delta * 0.3;
+    if (rotating && modelRef.current) {
+      modelRef.current.rotation.y += delta * 0.3;
     }
   });
 
   if (loadError) throw loadError;
   if (!scene) return null;
 
-  return <primitive ref={ref} object={scene} />;
+  return <primitive ref={modelRef} object={scene} />;
 }
 
 function EmptyCanvas({ label }: { label: string }) {
@@ -160,6 +164,70 @@ function EmptyCanvas({ label }: { label: string }) {
       <div style={{ color: 'var(--dim)', fontFamily: 'var(--font-mono)', fontSize: 14, letterSpacing: '0.2em', textTransform: 'uppercase' }}>
         {label}
       </div>
+    </div>
+  );
+}
+
+function IconStop() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconPlay() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path d="M5 3.5v9l7.5-4.5z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconReset() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path
+        d="M3.5 8a4.5 4.5 0 1 0 1.32-3.18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path d="M3 2.5V5h2.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CanvasTools({
+  rotating,
+  onToggleRotate,
+  onReset,
+}: {
+  rotating: boolean;
+  onToggleRotate: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="canvas-tools">
+      <button
+        type="button"
+        className="canvas-tool"
+        onClick={onToggleRotate}
+        aria-label={rotating ? 'Stop rotating' : 'Start rotating'}
+        title={rotating ? 'Stop rotating' : 'Start rotating'}
+      >
+        {rotating ? <IconStop /> : <IconPlay />}
+      </button>
+      <button
+        type="button"
+        className="canvas-tool"
+        onClick={onReset}
+        aria-label="Reset view"
+        title="Reset view"
+      >
+        <IconReset />
+      </button>
     </div>
   );
 }
@@ -178,12 +246,24 @@ function FooterOverlay({ footer }: { footer: Props['footer'] }) {
 
 export default function Canvas3D({ modelPath, texturePath, mtlPath, footer }: Props) {
   const [sceneError, setSceneError] = useState(false);
+  const [rotating, setRotating] = useState(true);
+  const modelRef = useRef<Group | null>(null);
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
 
   useEffect(() => {
     setSceneError(false);
+    setRotating(true);
   }, [modelPath, texturePath, mtlPath]);
 
   const hasModel = modelPath.trim().length > 0;
+
+  const handleReset = () => {
+    if (modelRef.current) {
+      modelRef.current.rotation.set(0, 0, 0);
+    }
+    controlsRef.current?.reset();
+    setRotating(true);
+  };
 
   return (
     <div className="canvas">
@@ -202,10 +282,23 @@ export default function Canvas3D({ modelPath, texturePath, mtlPath, footer }: Pr
                 path={`/artifacts/${modelPath}`}
                 texturePath={texturePath}
                 mtlPath={mtlPath}
+                rotating={rotating}
+                modelRef={modelRef}
               />
             </Suspense>
-            <OrbitControls enableDamping dampingFactor={0.1} enableZoom enablePan={false} />
+            <OrbitControls
+              ref={controlsRef}
+              enableDamping
+              dampingFactor={0.1}
+              enableZoom
+              enablePan={false}
+            />
           </Canvas>
+          <CanvasTools
+            rotating={rotating}
+            onToggleRotate={() => setRotating((r) => !r)}
+            onReset={handleReset}
+          />
         </ErrorBoundary>
       )}
       <FooterOverlay footer={footer} />
