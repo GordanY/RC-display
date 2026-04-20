@@ -85,7 +85,7 @@ html, body, #root {
 .kiosk-wrap {
   width: 1080px;
   height: 1920px;
-  transform-origin: top center;
+  transform-origin: top left;
 }
 
 .kiosk {

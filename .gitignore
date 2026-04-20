@@ -20,6 +20,10 @@ __pycache__/
 # The server creates public/artifacts/data.json on first write if missing.
 public/artifacts/
 
+# Browser-automation + ad-hoc debugging artifacts
+.playwright-mcp/
+testing/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
