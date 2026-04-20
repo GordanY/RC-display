@@ -48,6 +48,14 @@ export function useAutosave<T>({ data, save, delayMs = 400, enabled = true }: Op
 
   useEffect(() => {
     if (!enabled || data === null) return;
+    // Treat the first non-null data as the already-saved baseline — never
+    // echo fetched data straight back to the server. Without this, an admin
+    // page-load followed by an external edit to data.json (e.g. manual paste
+    // of a migration) would be overwritten with the pre-paste snapshot.
+    if (savedRef.current === null) {
+      savedRef.current = data;
+      return;
+    }
     if (savedRef.current === data) return;
     pendingRef.current = data;
     if (timerRef.current) clearTimeout(timerRef.current);

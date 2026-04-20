@@ -479,7 +479,14 @@ def create_app():
 
     @app.route("/artifacts/<path:filename>")
     def serve_artifacts(filename):
-        return send_from_directory(ARTIFACTS_DIR, filename)
+        resp = send_from_directory(ARTIFACTS_DIR, filename)
+        # data.json is mutable manifest data — must never be cached or the
+        # kiosk serves stale content after a manual paste / admin edit.
+        if filename == "data.json":
+            resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            resp.headers["Pragma"] = "no-cache"
+            resp.headers["Expires"] = "0"
+        return resp
 
     # --- Admin API ---
 
