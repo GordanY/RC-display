@@ -24,6 +24,8 @@ public/artifacts/
 # Browser-automation + ad-hoc debugging artifacts
 .playwright-mcp/
 testing/
+# Screenshots dropped in repo root by Playwright / dev sessions
+/*.png
 
 # Editor directories and files
 .vscode/*
