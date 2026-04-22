@@ -157,6 +157,14 @@ app.delete('/api/files', (req, res) => {
   if (fs.existsSync(resolved)) {
     fs.rmSync(resolved, { recursive: true, force: true });
   }
+  // Cascade: deleting a source also removes its generated sibling. Today the
+  // only generation is OBJ→GLB at upload time, so removing `foo.obj` also
+  // removes `foo.glb`. The reverse is intentionally not cascaded — GLB is
+  // derived, OBJ is the source of truth for rollback.
+  if (/\.obj$/i.test(resolved)) {
+    const glbPath = resolved.replace(/\.obj$/i, '.glb');
+    fs.rmSync(glbPath, { force: true });
+  }
   res.json({ ok: true });
 });
 
