@@ -557,26 +557,92 @@ def create_app():
         return jsonify({"ok": True})
 
     @app.route("/api/upload", methods=["POST"])
-    def upload_file():
-        if "file" not in request.files:
-            return jsonify({"error": "No file uploaded"}), 400
+    def upload_files_route():
+        # Match server/index.ts: accept `files` (multiple), convert any .obj to
+        # a .glb sibling via tools/obj_to_glb.mjs, return { paths: [...] }
+        # covering both the originals and the generated GLBs.
+        uploaded = request.files.getlist("files")
+        if not uploaded:
+            return jsonify({"error": "No files uploaded"}), 400
 
-        file = request.files["file"]
         dest_path = request.form.get("path", "")
-
         dest_dir = ARTIFACTS_DIR / dest_path
-        # Security: ensure dest is within ARTIFACTS_DIR
         try:
             dest_dir.resolve().relative_to(ARTIFACTS_DIR.resolve())
         except ValueError:
             return jsonify({"error": "Path traversal not allowed"}), 403
-
         dest_dir.mkdir(parents=True, exist_ok=True)
-        save_path = dest_dir / file.filename
-        file.save(str(save_path))
 
-        relative_path = save_path.relative_to(ARTIFACTS_DIR)
-        return jsonify({"path": str(relative_path)})
+        saved_rel = []
+        for f in uploaded:
+            base = os.path.basename(f.filename or "")
+            if not base or ".." in base or "/" in base or "\\" in base:
+                return jsonify({"error": f"Invalid filename: {f.filename}"}), 400
+            save_path = dest_dir / base
+            f.save(str(save_path))
+            saved_rel.append(str(save_path.relative_to(ARTIFACTS_DIR)))
+
+        # OBJ→GLB conversion. Mirrors server/index.ts: fail loud on error so
+        # the admin UI surfaces it (a silently-broken GLB is worse for the
+        # kiosk than an upload error the operator can react to).
+        converted_rel = []
+        obj_tool = BASE_DIR / "tools" / "obj_to_glb.mjs"
+        for rel in list(saved_rel):
+            if not rel.lower().endswith(".obj"):
+                continue
+            obj_path = ARTIFACTS_DIR / rel
+            glb_path = obj_path.with_suffix(".glb")
+            try:
+                subprocess.run(
+                    ["node", str(obj_tool), "--force", str(obj_path)],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    cwd=str(BASE_DIR),
+                )
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                # Best-effort cleanup of a partial .glb; swallow unlink errors.
+                try:
+                    if glb_path.exists():
+                        glb_path.unlink()
+                except Exception:
+                    pass
+                err_msg = ""
+                if isinstance(e, subprocess.CalledProcessError):
+                    err_msg = (e.stderr or e.stdout or "").strip() or str(e)
+                else:
+                    err_msg = f"node not available: {e}"
+                return (
+                    jsonify(
+                        {"error": f"obj2gltf failed on {os.path.basename(rel)}: {err_msg}"}
+                    ),
+                    500,
+                )
+            if glb_path.exists():
+                converted_rel.append(str(glb_path.relative_to(ARTIFACTS_DIR)))
+
+        return jsonify({"paths": saved_rel + converted_rel})
+
+    @app.route("/api/list", methods=["GET"])
+    def list_artifact_dir():
+        # Mirrors server/index.ts: admin polls this to keep the "files present
+        # on disk" indicator in sync. Returns { files: [] } for a missing dir
+        # so a freshly-created artifact/creation can poll before upload.
+        rel = request.args.get("path", "")
+        if not rel:
+            return jsonify({"error": "path required"}), 400
+        target = ARTIFACTS_DIR / rel
+        try:
+            resolved = target.resolve()
+            resolved.relative_to(ARTIFACTS_DIR.resolve())
+        except ValueError:
+            return jsonify({"error": "Invalid path"}), 400
+        if resolved == ARTIFACTS_DIR.resolve():
+            return jsonify({"error": "Invalid path"}), 400
+        if not resolved.exists():
+            return jsonify({"files": []})
+        names = [e.name for e in resolved.iterdir() if e.is_file()]
+        return jsonify({"files": names})
 
     @app.route("/api/files", methods=["DELETE"])
     def delete_files():
@@ -595,12 +661,24 @@ def create_app():
             else:
                 file_path.unlink()
 
+        # Cascade: deleting foo.obj also removes its generated foo.glb sibling.
+        # Mirrors server/index.ts — GLB is derived, OBJ is the source of truth.
+        if file_path.suffix.lower() == ".obj":
+            glb_sibling = file_path.with_suffix(".glb")
+            if glb_sibling.exists():
+                glb_sibling.unlink()
+
         return jsonify({"ok": True})
 
     # --- Catch-all for SPA routing ---
 
     @app.route("/<path:path>")
     def catch_all(path):
+        # Unknown /api/* must 404 — never fall through to index.html, or a
+        # client fetch will see HTML-as-JSON and silently misbehave (this
+        # exact drift hid the missing /api/list route for a release).
+        if path.startswith("api/"):
+            return jsonify({"error": "Not found"}), 404
         # Try dist/ first (static assets like favicon, etc.)
         file_path = DIST_DIR / path
         if file_path.is_file():

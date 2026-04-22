@@ -14,8 +14,12 @@ export function useFileList(dir: string, intervalMs = 1000): string[] {
       try {
         const next = await listFiles(dir);
         if (alive) setFiles(next);
-      } catch {
-        // Transient network/server errors are OK — next tick retries.
+      } catch (err) {
+        // Transient network/server errors are OK — next tick retries. But log
+        // so the next time the API contract drifts (e.g. missing route on the
+        // Flask launcher returning index.html as JSON), it surfaces in the
+        // console rather than silently leaving every upload as "檔案遺失".
+        console.warn(`useFileList: failed to list "${dir}":`, err);
       }
     };
     void poll();
