@@ -502,6 +502,9 @@ export default function Canvas3D({ modelPath, texturePath, mtlPath, footer }: Pr
   useEffect(() => {
     setSceneError(false);
     setRotating(true);
+    // Restore the camera to its saved position0/zoom0 so the new model
+    // doesn't inherit the previous model's pinch-zoom or orbit angle.
+    controlsRef.current?.reset();
   }, [modelPath, texturePath, mtlPath]);
 
   // Fast one-finger swipes on capacitive touchscreens often emit a ghost
