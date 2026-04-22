@@ -497,11 +497,54 @@ export default function Canvas3D({ modelPath, texturePath, mtlPath, footer }: Pr
   const [rotating, setRotating] = useState(true);
   const modelRef = useRef<Group | null>(null);
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setSceneError(false);
     setRotating(true);
   }, [modelPath, texturePath, mtlPath]);
+
+  // Fast one-finger swipes on capacitive touchscreens often emit a ghost
+  // second pointer right next to the real one. OrbitControls then switches to
+  // DOLLY_PAN and, because handleTouchStartDolly records the tiny initial
+  // separation as `dollyStart`, the next move computes a huge zoom ratio.
+  // We swallow pointerdowns that land within GHOST_SEP_PX of a live touch
+  // pointer (capture phase, so OrbitControls' target-phase listener never
+  // sees them). Real two-finger pinches start with the fingers clearly apart
+  // and pass through untouched.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const GHOST_SEP_PX = 60;
+    const live = new Map<number, { x: number; y: number }>();
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      for (const p of live.values()) {
+        if (Math.hypot(e.clientX - p.x, e.clientY - p.y) < GHOST_SEP_PX) {
+          e.stopPropagation();
+          return;
+        }
+      }
+      live.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    };
+    const onMove = (e: PointerEvent) => {
+      const p = live.get(e.pointerId);
+      if (p) { p.x = e.clientX; p.y = e.clientY; }
+    };
+    const onEnd = (e: PointerEvent) => {
+      live.delete(e.pointerId);
+    };
+    el.addEventListener('pointerdown', onDown, { capture: true });
+    el.addEventListener('pointermove', onMove, { capture: true });
+    el.addEventListener('pointerup', onEnd, { capture: true });
+    el.addEventListener('pointercancel', onEnd, { capture: true });
+    return () => {
+      el.removeEventListener('pointerdown', onDown, { capture: true });
+      el.removeEventListener('pointermove', onMove, { capture: true });
+      el.removeEventListener('pointerup', onEnd, { capture: true });
+      el.removeEventListener('pointercancel', onEnd, { capture: true });
+    };
+  }, []);
 
   const hasModel = modelPath.trim().length > 0;
 
@@ -514,7 +557,7 @@ export default function Canvas3D({ modelPath, texturePath, mtlPath, footer }: Pr
   };
 
   return (
-    <div className="canvas">
+    <div className="canvas" ref={wrapRef}>
       {!hasModel && <EmptyCanvas label="NO MODEL" />}
       {hasModel && sceneError && <EmptyCanvas label="MODEL FAILED TO LOAD" />}
       {hasModel && !sceneError && (
@@ -538,7 +581,7 @@ export default function Canvas3D({ modelPath, texturePath, mtlPath, footer }: Pr
               ref={controlsRef}
               enableDamping
               dampingFactor={0.1}
-              enableZoom={false}
+              enableZoom
               enablePan={false}
             />
           </Canvas>
