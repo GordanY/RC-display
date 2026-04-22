@@ -258,11 +258,19 @@ def ensure_venv_and_flask():
     if missing:
         warn_if_offline(f"installing {', '.join(missing)} via pip")
         log.info(f"[setup] Installing: {', '.join(missing)}...")
-        if os.name == "nt":
-            pip = VENV_DIR / "Scripts" / "pip.exe"
-        else:
-            pip = VENV_DIR / "bin" / "pip3"
-        subprocess.check_call([str(pip), "install", *missing])
+        # Invoke pip via `python -m pip` rather than the Scripts/pip.exe
+        # launcher. Minimal or custom Python installs can produce venvs where
+        # the launcher is missing even though the `pip` module is usable —
+        # seen in the wild on a Windows 10 kiosk, raised FileNotFoundError
+        # [WinError 2] when we called pip.exe directly.
+        pip_cmd = [str(venv_python), "-m", "pip"]
+        check = subprocess.run([*pip_cmd, "--version"], capture_output=True)
+        if check.returncode != 0:
+            # Bootstrap pip into the venv. Falls back gracefully on installs
+            # that shipped without ensurepip (rare — embeddable distros).
+            log.info("[setup] Bootstrapping pip via ensurepip...")
+            subprocess.check_call([str(venv_python), "-m", "ensurepip", "--upgrade"])
+        subprocess.check_call([*pip_cmd, "install", *missing])
         log.info("[setup] Python packages installed successfully.")
     else:
         log.info("[setup] Flask and Flask-Compress already installed.")
