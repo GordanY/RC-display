@@ -538,7 +538,7 @@ export default function Canvas3D({ modelPath, texturePath, mtlPath, footer }: Pr
               ref={controlsRef}
               enableDamping
               dampingFactor={0.1}
-              enableZoom
+              enableZoom={false}
               enablePan={false}
             />
           </Canvas>
