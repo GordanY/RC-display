@@ -239,22 +239,33 @@ def ensure_venv_and_flask():
             log.error("[error] Still not found. Python may not support venv.")
             pause_and_exit(1)
 
-    # Install Flask if not present in the venv
-    result = subprocess.run(
-        [str(venv_python), "-c", "import flask"],
-        capture_output=True,
-    )
-    if result.returncode != 0:
-        warn_if_offline("installing Flask via pip")
-        log.info("[setup] Installing Flask...")
+    # Install Flask + Flask-Compress if not present in the venv.
+    # Flask-Compress gzip/brotli-compresses /artifacts/*.obj responses so the
+    # kiosk downloads ~15–20% of the raw OBJ size on first view.
+    needed = [
+        ("flask", "flask"),
+        ("flask_compress", "flask-compress"),
+    ]
+    missing = []
+    for import_name, pkg_name in needed:
+        result = subprocess.run(
+            [str(venv_python), "-c", f"import {import_name}"],
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            missing.append(pkg_name)
+
+    if missing:
+        warn_if_offline(f"installing {', '.join(missing)} via pip")
+        log.info(f"[setup] Installing: {', '.join(missing)}...")
         if os.name == "nt":
             pip = VENV_DIR / "Scripts" / "pip.exe"
         else:
             pip = VENV_DIR / "bin" / "pip3"
-        subprocess.check_call([str(pip), "install", "flask"])
-        log.info("[setup] Flask installed successfully.")
+        subprocess.check_call([str(pip), "install", *missing])
+        log.info("[setup] Python packages installed successfully.")
     else:
-        log.info("[setup] Flask already installed.")
+        log.info("[setup] Flask and Flask-Compress already installed.")
 
     # Re-launch this script under the venv python
     log.info(f"[setup] Re-launching with: {venv_python}")
@@ -459,9 +470,38 @@ def print_preflight_summary():
 # Flask application
 # ---------------------------------------------------------------------------
 def create_app():
+    import mimetypes
     from flask import Flask, request, jsonify, send_from_directory, send_file
+    from flask_compress import Compress
+
+    # .obj / .mtl have no registered mimetype on most systems, so Flask serves
+    # them as application/octet-stream and Flask-Compress (which keys off
+    # content-type) skips them. Forcing text/plain makes them compressible
+    # without changing how browsers treat the bytes.
+    mimetypes.add_type("text/plain", ".obj")
+    mimetypes.add_type("text/plain", ".mtl")
+    # Binary GLB is pre-packed — gzipping it wastes CPU for ~0% gain, so we
+    # keep it OUT of COMPRESS_MIMETYPES below. Registering the correct type
+    # lets browsers cache it under the right content-type.
+    mimetypes.add_type("model/gltf-binary", ".glb")
+    mimetypes.add_type("model/gltf+json", ".gltf")
 
     app = Flask(__name__, static_folder=None)
+
+    # gzip/brotli everything text-like. The huge OBJ files are text, so this is
+    # the single biggest win for cold-load time on 3D models.
+    app.config["COMPRESS_MIMETYPES"] = [
+        "text/html",
+        "text/css",
+        "text/xml",
+        "text/plain",
+        "application/json",
+        "application/javascript",
+        "application/xml",
+        "image/svg+xml",
+    ]
+    app.config["COMPRESS_MIN_SIZE"] = 1024
+    Compress(app)
 
     # --- Serve built frontend (dist/) ---
 
@@ -486,6 +526,11 @@ def create_app():
             resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             resp.headers["Pragma"] = "no-cache"
             resp.headers["Expires"] = "0"
+        else:
+            # Let browsers cache heavy models/textures for an hour but still
+            # revalidate via ETag/Last-Modified so admin re-uploads propagate
+            # (we can't use `immutable` since upload overwrites keep filenames).
+            resp.headers["Cache-Control"] = "public, max-age=3600, must-revalidate"
         return resp
 
     # --- Admin API ---
