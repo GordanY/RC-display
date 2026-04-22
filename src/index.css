@@ -477,6 +477,25 @@ html, body, #root {
   letter-spacing: 0.04em;
   flex: 1;
   word-break: break-all;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.file-remove {
+  appearance: none;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1;
+  padding: 1px 6px 2px;
+  cursor: pointer;
+  transition: all 120ms var(--ease);
+}
+.file-remove:hover {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 .preview-thumb {
   width: 96px;

@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Creation, DisplayMode } from '../types';
-import { uploadFile } from './api';
+import { deleteFile, uploadFile } from './api';
+import { useFileList } from '../hooks/useFileList';
+import {
+  detectFormat,
+  hasFormat,
+  isMissing,
+  pickSibling,
+  type ModelFormat,
+} from './modelFormat';
 
 interface Props {
   creation: Creation;
@@ -26,6 +34,34 @@ export default function CreationForm({ creation, artifactId, onChange, onDelete 
   }, [localPreview]);
 
   const destDir = `${artifactId}/creations/${creation.id}`;
+
+  const files = useFileList(destDir);
+  // See ArtifactForm for rationale on useState-backed format.
+  const [format, setFormat] = useState<ModelFormat>(detectFormat(creation.model));
+  const hasObj = hasFormat(files, 'obj');
+  const hasFbx = hasFormat(files, 'fbx');
+
+  const switchFormat = (target: ModelFormat) => {
+    if (target === format) return;
+    setFormat(target);
+    const sibling = pickSibling(files, target);
+    const nextModel = sibling ? `${destDir}/${sibling}` : '';
+    onChange({ ...creation, model: nextModel });
+  };
+
+  // See ArtifactForm.removeFile — best-effort file delete + field clear.
+  const removeFile = async (path: string | undefined, clear: () => Creation) => {
+    if (path) {
+      try {
+        await deleteFile(path);
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : String(err));
+        return;
+      }
+    }
+    setUploadError(null);
+    onChange(clear());
+  };
 
   const uploadSlot = async (
     slot: UploadSlot,
@@ -69,10 +105,11 @@ export default function CreationForm({ creation, artifactId, onChange, onDelete 
   const handleObj = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const expected = format === 'fbx' ? '.fbx' : '.obj';
     uploadSlot(
       'obj',
       file,
-      (f) => (f.name.toLowerCase().endsWith('.obj') ? null : '必須是 .obj 檔案'),
+      (f) => (f.name.toLowerCase().endsWith(expected) ? null : `必須是 ${expected} 檔案`),
       (path) => ({ ...creation, model: path }),
       objRef,
     );
@@ -177,36 +214,69 @@ export default function CreationForm({ creation, artifactId, onChange, onDelete 
           />
           {uploadingSlot === 'preview' && <span style={{ color: 'var(--amber)', fontSize: 13 }}>上傳中…</span>}
         </div>
-        {creation.preview && <div className="file-path">{creation.preview}</div>}
+        {creation.preview && (
+          <div
+            className="file-path"
+            style={isMissing(creation.preview, files) ? { color: 'var(--danger)' } : undefined}
+          >
+            {isMissing(creation.preview, files) ? '檔案遺失' : creation.preview}
+            <button
+              type="button"
+              className="file-remove"
+              onClick={() => removeFile(creation.preview, () => ({ ...creation, preview: '' }))}
+              aria-label="移除檔案"
+              title="移除檔案"
+            >
+              ×
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ marginBottom: 16 }}>
         <div className="admin-label">3D 模型檔案</div>
+        <FormatToggle
+          idSuffix={creation.id}
+          format={format}
+          hasObj={hasObj}
+          hasFbx={hasFbx}
+          onSwitch={switchFormat}
+        />
         <div style={{ display: 'grid', gap: 10 }}>
           <UploadRow
-            label="OBJ 模型（必須）"
-            accept=".obj"
+            label={format === 'fbx' ? 'FBX 模型（必須）' : 'OBJ 模型（必須）'}
+            accept={format === 'fbx' ? '.fbx' : '.obj'}
             inputRef={objRef}
             onChange={handleObj}
             uploading={uploadingSlot === 'obj'}
             currentPath={creation.model}
+            missing={isMissing(creation.model, files)}
+            onRemove={() => removeFile(creation.model, () => ({ ...creation, model: '' }))}
           />
-          <UploadRow
-            label="貼圖 JPG（若無 MTL 則必須）"
-            accept=".jpg,.jpeg,image/jpeg"
-            inputRef={textureRef}
-            onChange={handleTexture}
-            uploading={uploadingSlot === 'texture'}
-            currentPath={creation.texture}
-          />
-          <UploadRow
-            label="MTL 材質（可選）"
-            accept=".mtl"
-            inputRef={mtlRef}
-            onChange={handleMtl}
-            uploading={uploadingSlot === 'mtl'}
-            currentPath={creation.mtl}
-          />
+          {format === 'obj' && (
+            <>
+              <UploadRow
+                label="貼圖 JPG（若無 MTL 則必須）"
+                accept=".jpg,.jpeg,image/jpeg"
+                inputRef={textureRef}
+                onChange={handleTexture}
+                uploading={uploadingSlot === 'texture'}
+                currentPath={creation.texture}
+                missing={isMissing(creation.texture, files)}
+                onRemove={() => removeFile(creation.texture, () => ({ ...creation, texture: undefined }))}
+              />
+              <UploadRow
+                label="MTL 材質（可選）"
+                accept=".mtl"
+                inputRef={mtlRef}
+                onChange={handleMtl}
+                uploading={uploadingSlot === 'mtl'}
+                currentPath={creation.mtl}
+                missing={isMissing(creation.mtl, files)}
+                onRemove={() => removeFile(creation.mtl, () => ({ ...creation, mtl: undefined }))}
+              />
+            </>
+          )}
           {uploadError && <span style={{ color: 'var(--danger)', fontSize: 13 }}>{uploadError}</span>}
         </div>
       </div>
@@ -234,9 +304,20 @@ interface UploadRowProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   uploading: boolean;
   currentPath?: string;
+  missing?: boolean;
+  onRemove?: () => void;
 }
 
-function UploadRow({ label, accept, inputRef, onChange, uploading, currentPath }: UploadRowProps) {
+function UploadRow({
+  label,
+  accept,
+  inputRef,
+  onChange,
+  uploading,
+  currentPath,
+  missing,
+  onRemove,
+}: UploadRowProps) {
   return (
     <div className="file-row" style={{ alignItems: 'flex-start', flexDirection: 'column', gap: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -250,7 +331,70 @@ function UploadRow({ label, accept, inputRef, onChange, uploading, currentPath }
         />
         {uploading && <span style={{ color: 'var(--amber)', fontSize: 13 }}>上傳中…</span>}
       </div>
-      {currentPath && <div className="file-path">{currentPath}</div>}
+      {currentPath && (
+        <div className="file-path" style={missing ? { color: 'var(--danger)' } : undefined}>
+          {missing ? '檔案遺失' : currentPath}
+          {onRemove && (
+            <button
+              type="button"
+              className="file-remove"
+              onClick={onRemove}
+              aria-label="移除檔案"
+              title="移除檔案"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface FormatToggleProps {
+  idSuffix: string;
+  format: ModelFormat;
+  hasObj: boolean;
+  hasFbx: boolean;
+  onSwitch: (target: ModelFormat) => void;
+}
+
+function FormatToggle({ idSuffix, format, hasObj, hasFbx, onSwitch }: FormatToggleProps) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div className="admin-radio-group">
+        <label className={format === 'obj' ? 'active' : ''}>
+          <input
+            type="radio"
+            name={`fmt-${idSuffix}`}
+            checked={format === 'obj'}
+            onChange={() => onSwitch('obj')}
+          />
+          OBJ
+          {format !== 'obj' && hasObj && (
+            <span style={{ marginLeft: 6, color: 'var(--amber)', fontSize: 12 }}>
+              已有 OBJ 檔案
+            </span>
+          )}
+        </label>
+        <label className={format === 'fbx' ? 'active' : ''}>
+          <input
+            type="radio"
+            name={`fmt-${idSuffix}`}
+            checked={format === 'fbx'}
+            onChange={() => onSwitch('fbx')}
+          />
+          FBX
+          {format !== 'fbx' && hasFbx && (
+            <span style={{ marginLeft: 6, color: 'var(--amber)', fontSize: 12 }}>
+              已有 FBX 檔案
+            </span>
+          )}
+        </label>
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--dim)', marginTop: 4 }}>
+        切換格式只會變更渲染來源，不會刪除任何已上傳檔案。
+      </div>
     </div>
   );
 }

@@ -4,12 +4,20 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+// @ts-expect-error obj2gltf ships no type declarations; minimal shim below.
+import obj2gltf from 'obj2gltf';
+
+type Obj2GltfFn = (
+  objPath: string,
+  options?: { binary?: boolean },
+) => Promise<Buffer>;
+const convertObjToGlb = obj2gltf as Obj2GltfFn;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 8010;
+const PORT = 3000;
 const ARTIFACTS_DIR = path.join(__dirname, '..', 'public', 'artifacts');
 const DATA_FILE = path.join(ARTIFACTS_DIR, 'data.json');
 
@@ -133,14 +141,66 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage, limits: { fileSize: 500 * 1024 * 1024 } });
 
-app.post('/api/upload', upload.array('files'), (req, res) => {
+app.post('/api/upload', upload.array('files'), async (req, res) => {
   const files = (req.files as Express.Multer.File[] | undefined) ?? [];
   if (files.length === 0) {
     res.status(400).json({ error: 'No files uploaded' });
     return;
   }
-  const paths = files.map((f) => path.relative(ARTIFACTS_DIR, f.path));
-  res.json({ paths });
+
+  // Synchronously convert any uploaded .obj to a .glb sibling. Keeps OBJ on
+  // disk so the admin can roll back to the OBJ path in data.json without
+  // re-uploading. Fails loud: if obj2gltf throws, return 500 with the error
+  // so the admin UI can surface it (better than a silently broken kiosk).
+  const converted: string[] = [];
+  for (const f of files) {
+    if (!f.originalname.toLowerCase().endsWith('.obj')) continue;
+    const objPath = f.path;
+    const glbPath = objPath.replace(/\.obj$/i, '.glb');
+    try {
+      const glb = await convertObjToGlb(objPath, { binary: true });
+      await fs.promises.writeFile(glbPath, glb);
+      converted.push(path.relative(ARTIFACTS_DIR, glbPath));
+    } catch (err) {
+      // Best-effort cleanup of a partial .glb; swallow unlink errors.
+      fs.promises.unlink(glbPath).catch(() => {});
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({
+        error: `obj2gltf failed on ${f.originalname}: ${msg}`,
+      });
+      return;
+    }
+  }
+
+  // Return every file that now exists on disk: uploaded originals (including
+  // the OBJ) plus any newly written GLBs. Admin/client picks which to store
+  // in data.json — typically the GLB for the kiosk and nothing else.
+  const uploaded = files.map((f) => path.relative(ARTIFACTS_DIR, f.path));
+  res.json({ paths: [...uploaded, ...converted] });
+});
+
+// List filenames in an artifacts subdirectory. Admin polls this per-form
+// every ~1s so "formats present on disk" state reflects manual filesystem
+// edits (e.g. file deleted via OS Finder). Missing dir → empty list so a
+// freshly-created artifact/creation can poll before its dir exists.
+app.get('/api/list', (req, res) => {
+  const rel = typeof req.query.path === 'string' ? req.query.path : '';
+  if (!rel) {
+    res.status(400).json({ error: 'path required' });
+    return;
+  }
+  const resolved = safeResolve(rel);
+  if (!resolved || resolved === ARTIFACTS_DIR) {
+    res.status(400).json({ error: 'Invalid path' });
+    return;
+  }
+  if (!fs.existsSync(resolved)) {
+    res.json({ files: [] });
+    return;
+  }
+  const entries = fs.readdirSync(resolved, { withFileTypes: true });
+  const files = entries.filter((e) => e.isFile()).map((e) => e.name);
+  res.json({ files });
 });
 
 app.delete('/api/files', (req, res) => {

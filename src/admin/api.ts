@@ -1,6 +1,6 @@
 import type { ExhibitData } from '../types';
 
-const BASE = import.meta.env.DEV ? 'http://localhost:8010/api' : '/api';
+const BASE = import.meta.env.DEV ? 'http://localhost:3000/api' : '/api';
 
 export async function fetchData(): Promise<ExhibitData> {
   const res = await fetch(`${BASE}/data`);
@@ -36,7 +36,22 @@ export async function uploadFiles(files: File[], destDir: string): Promise<strin
 
 export async function uploadFile(file: File, destDir: string): Promise<string> {
   const paths = await uploadFiles([file], destDir);
+  // Server converts uploaded .obj files to .glb siblings and returns both
+  // paths. Prefer the GLB so the kiosk uses the fast loader by default; the
+  // original OBJ stays on disk, so rollback is flipping the extension in
+  // data.json (no re-upload, no code change).
+  if (file.name.toLowerCase().endsWith('.obj')) {
+    const glb = paths.find((p) => p.toLowerCase().endsWith('.glb'));
+    if (glb) return glb;
+  }
   return paths[0];
+}
+
+export async function listFiles(dir: string): Promise<string[]> {
+  const res = await fetch(`${BASE}/list?path=${encodeURIComponent(dir)}`);
+  if (!res.ok) throw new Error(`GET /list failed: ${res.status}`);
+  const json = (await res.json()) as { files: string[] };
+  return json.files;
 }
 
 export async function deleteFile(relPath: string): Promise<void> {

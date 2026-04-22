@@ -82,6 +82,7 @@ export default function ArtifactList({ data, onChange }: Props) {
       {selected ? (
         <>
           <ArtifactForm
+            key={selected.id}
             artifact={selected}
             onChange={handleArtifactChange}
             onDelete={() => handleDelete(selected.id)}
