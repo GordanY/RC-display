@@ -623,6 +623,53 @@ def create_app():
 
         return jsonify({"paths": saved_rel + converted_rel})
 
+    @app.route("/api/rebuild-glb", methods=["POST"])
+    def rebuild_glb():
+        # Mirrors server/index.ts: re-runs OBJ→GLB conversion against a
+        # file already on disk, so the admin UI can rebuild the GLB after
+        # MTL/JPEG sidecars are uploaded. Reuses tools/obj_to_glb.mjs, the
+        # same external tool the upload route invokes.
+        data = request.get_json() or {}
+        rel = data.get("objPath", "")
+        if not rel or not isinstance(rel, str):
+            return jsonify({"error": "Invalid objPath"}), 400
+        if not rel.lower().endswith(".obj"):
+            return jsonify({"error": "objPath must end with .obj"}), 400
+
+        obj_path = ARTIFACTS_DIR / rel
+        try:
+            resolved = obj_path.resolve()
+            resolved.relative_to(ARTIFACTS_DIR.resolve())
+        except ValueError:
+            return jsonify({"error": "Path traversal not allowed"}), 403
+        if resolved == ARTIFACTS_DIR.resolve():
+            return jsonify({"error": "Invalid objPath"}), 400
+        if not resolved.exists():
+            return jsonify({"error": "OBJ not found on disk"}), 404
+
+        glb_path = resolved.with_suffix(".glb")
+        obj_tool = BASE_DIR / "tools" / "obj_to_glb.mjs"
+        try:
+            subprocess.run(
+                ["node", str(obj_tool), "--force", str(resolved)],
+                capture_output=True,
+                text=True,
+                check=True,
+                cwd=str(BASE_DIR),
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            err_msg = ""
+            if isinstance(e, subprocess.CalledProcessError):
+                err_msg = (e.stderr or e.stdout or "").strip() or str(e)
+            else:
+                err_msg = f"node not available: {e}"
+            return (
+                jsonify({"error": f"obj2gltf failed on {resolved.name}: {err_msg}"}),
+                500,
+            )
+
+        return jsonify({"glbPath": str(glb_path.relative_to(ARTIFACTS_DIR))})
+
     @app.route("/api/list", methods=["GET"])
     def list_artifact_dir():
         # Mirrors server/index.ts: admin polls this to keep the "files present
