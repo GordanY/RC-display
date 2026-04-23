@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import type { Artifact } from '../types';
-import { deleteFile, rebuildGlb, uploadFiles } from './api';
+import { deleteFile, listFiles, rebuildGlb, uploadFiles } from './api';
 import { useFileList } from '../hooks/useFileList';
 import {
   detectFormat,
@@ -61,11 +61,18 @@ export default function ArtifactForm({ artifact, onChange, onDelete }: Props) {
   };
 
   // Fires a GLB rebuild iff both OBJ and MTL are on disk for this artifact.
-  // Returns silently if either is missing — the trigger fires again next
-  // time a slot changes, so order of upload doesn't matter.
+  // Re-queries the directory (rather than reading the useFileList snapshot)
+  // so a JUST-uploaded sidecar file is visible to the trigger — the polled
+  // `files` state lags upload completion by up to 1s.
   const maybeRebuild = async () => {
-    if (!hasFormat(files, 'obj') || !hasMtl(files)) return;
-    const objName = files.find((f) => /\.obj$/i.test(f));
+    let live: string[];
+    try {
+      live = await listFiles(artifact.id);
+    } catch {
+      return;
+    }
+    if (!live.some((f) => /\.mtl$/i.test(f))) return;
+    const objName = live.find((f) => /\.obj$/i.test(f));
     if (!objName) return;
     setRebuilding(true);
     try {
@@ -119,7 +126,7 @@ export default function ArtifactForm({ artifact, onChange, onDelete }: Props) {
     setUploadingSlot('texture');
     setUploadError(null);
     try {
-      await uploadFiles(selected, artifact.id);
+      const paths = await uploadFiles(selected, artifact.id);
       // Field-write rule (spec §1):
       //   No MTL on disk → set `texture` to first JPEG (legacy uniform-override path).
       //   MTL on disk     → leave `texture` empty (rebuilt GLB carries textures).
@@ -128,7 +135,7 @@ export default function ArtifactForm({ artifact, onChange, onDelete }: Props) {
         onChange({ ...artifact, texture: undefined });
         await maybeRebuild();
       } else {
-        onChange({ ...artifact, texture: `${artifact.id}/${selected[0].name}` });
+        onChange({ ...artifact, texture: paths[0] });
       }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : String(err));
@@ -138,7 +145,7 @@ export default function ArtifactForm({ artifact, onChange, onDelete }: Props) {
     }
   };
 
-  const handleMtl = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMtl = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.mtl')) {
@@ -148,21 +155,19 @@ export default function ArtifactForm({ artifact, onChange, onDelete }: Props) {
     }
     setUploadingSlot('mtl');
     setUploadError(null);
-    (async () => {
-      try {
-        const path = await uploadFiles([file], artifact.id);
-        // Clear `texture` on the same change — see spec §4: the kiosk's GLTF
-        // uniform-override would otherwise overwrite the new MTL-driven
-        // textures (Canvas3D.tsx:274-281).
-        onChange({ ...artifact, mtl: path[0], texture: undefined });
-        await maybeRebuild();
-      } catch (err) {
-        setUploadError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setUploadingSlot(null);
-        if (mtlRef.current) mtlRef.current.value = '';
-      }
-    })();
+    try {
+      const paths = await uploadFiles([file], artifact.id);
+      // Clear `texture` on the same change — see spec §4: the kiosk's GLTF
+      // uniform-override would otherwise overwrite the new MTL-driven
+      // textures (Canvas3D.tsx:274-281).
+      onChange({ ...artifact, mtl: paths[0], texture: undefined });
+      await maybeRebuild();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploadingSlot(null);
+      if (mtlRef.current) mtlRef.current.value = '';
+    }
   };
 
   return (
