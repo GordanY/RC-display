@@ -1,11 +1,8 @@
-// Parses an MTL file's text into an ordered list of texture references.
-// Used by the admin UI to (a) show which materials still need a JPEG, and
-// (b) warn when an MTL uses a subdirectory path (which the flat upload UI
-// can't satisfy).
+// Parses map_Kd lines so the admin UI can warn about missing/subdirectory textures.
 export interface MtlTextureRef {
-  material: string;     // newmtl name preceding this map_Kd; '' if none
-  file: string;         // raw value of the map_Kd line, trimmed
-  hasSubpath: boolean;  // true if `file` contains a forward slash
+  material: string;
+  file: string;
+  hasSubpath: boolean;
 }
 
 export function parseMtlTextureRefs(mtlText: string): MtlTextureRef[] {
@@ -16,12 +13,12 @@ export function parseMtlTextureRefs(mtlText: string): MtlTextureRef[] {
     if (line.startsWith('#') || line.length === 0) continue;
     const newmtlMatch = line.match(/^newmtl\s+(.+)$/);
     if (newmtlMatch) {
-      currentMaterial = newmtlMatch[1].trim();
+      currentMaterial = newmtlMatch[1];
       continue;
     }
     const mapMatch = line.match(/^map_Kd\s+(.+)$/);
     if (mapMatch) {
-      const file = mapMatch[1].trim();
+      const file = mapMatch[1];
       if (!file) continue;
       out.push({
         material: currentMaterial,
