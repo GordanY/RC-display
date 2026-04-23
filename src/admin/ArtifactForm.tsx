@@ -1,14 +1,18 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Artifact } from '../types';
-import { deleteFile, uploadFile } from './api';
+import { deleteFile, listFiles, rebuildGlb, uploadFiles } from './api';
 import { useFileList } from '../hooks/useFileList';
 import {
   detectFormat,
   hasFormat,
+  hasMtl,
   isMissing,
+  listJpegs,
   pickSibling,
   type ModelFormat,
 } from './modelFormat';
+import { parseMtlTextureRefs, type MtlTextureRef } from './mtlParse';
+import { TextureMultiRow } from './TextureMultiRow';
 
 interface Props {
   artifact: Artifact;
@@ -21,6 +25,8 @@ type UploadSlot = 'obj' | 'texture' | 'mtl';
 export default function ArtifactForm({ artifact, onChange, onDelete }: Props) {
   const [uploadingSlot, setUploadingSlot] = useState<UploadSlot | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [rebuilding, setRebuilding] = useState(false);
+  const [mtlRefs, setMtlRefs] = useState<MtlTextureRef[]>([]);
   const objRef = useRef<HTMLInputElement>(null);
   const textureRef = useRef<HTMLInputElement>(null);
   const mtlRef = useRef<HTMLInputElement>(null);
@@ -33,6 +39,20 @@ export default function ArtifactForm({ artifact, onChange, onDelete }: Props) {
   const [format, setFormat] = useState<ModelFormat>(detectFormat(artifact.model));
   const hasObj = hasFormat(files, 'obj');
   const hasFbx = hasFormat(files, 'fbx');
+
+  // Re-parse MTL whenever its path changes. Fetch is cheap; MTL is small.
+  useEffect(() => {
+    if (!artifact.mtl) { setMtlRefs([]); return; }
+    let cancelled = false;
+    fetch(`/artifacts/${artifact.mtl}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        if (!cancelled) setMtlRefs(parseMtlTextureRefs(text));
+      })
+      .catch(() => { if (!cancelled) setMtlRefs([]); });
+    return () => { cancelled = true; };
+  }, [artifact.mtl]);
 
   const switchFormat = (target: ModelFormat) => {
     if (target === format) return;
@@ -58,70 +78,114 @@ export default function ArtifactForm({ artifact, onChange, onDelete }: Props) {
     onChange(clear());
   };
 
-  const uploadSlot = async (
-    slot: UploadSlot,
-    file: File,
-    validate: (f: File) => string | null,
-    apply: (path: string) => Artifact,
-    inputRef: React.RefObject<HTMLInputElement | null>,
-  ) => {
-    const err = validate(file);
-    if (err) {
-      setUploadError(err);
-      if (inputRef.current) inputRef.current.value = '';
+  // Fires a GLB rebuild iff both OBJ and MTL are on disk for this artifact.
+  // Re-queries the directory (rather than reading the useFileList snapshot)
+  // so a JUST-uploaded sidecar file is visible to the trigger — the polled
+  // `files` state lags upload completion by up to 1s.
+  const maybeRebuild = async () => {
+    let live: string[];
+    try {
+      live = await listFiles(artifact.id);
+    } catch {
       return;
     }
-    setUploadingSlot(slot);
-    setUploadError(null);
+    if (!live.some((f) => /\.mtl$/i.test(f))) return;
+    const objName = live.find((f) => /\.obj$/i.test(f));
+    if (!objName) return;
+    setRebuilding(true);
     try {
-      const path = await uploadFile(file, artifact.id);
-      onChange(apply(path));
-    } catch (e) {
-      setUploadError(e instanceof Error ? e.message : String(e));
+      await rebuildGlb(`${artifact.id}/${objName}`);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err));
     } finally {
-      setUploadingSlot(null);
-      if (inputRef.current) inputRef.current.value = '';
+      setRebuilding(false);
     }
   };
 
-  const handleObj = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleObj = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const expected = format === 'fbx' ? '.fbx' : '.obj';
-    uploadSlot(
-      'obj',
-      file,
-      (f) => (f.name.toLowerCase().endsWith(expected) ? null : `必須是 ${expected} 檔案`),
-      (path) => ({ ...artifact, model: path }),
-      objRef,
-    );
+    if (!file.name.toLowerCase().endsWith(expected)) {
+      setUploadError(`必須是 ${expected} 檔案`);
+      if (objRef.current) objRef.current.value = '';
+      return;
+    }
+    setUploadingSlot('obj');
+    setUploadError(null);
+    try {
+      const paths = await uploadFiles([file], artifact.id);
+      // Same disambiguation as the old uploadFile() helper: prefer the GLB
+      // sibling for OBJ, since the kiosk uses the fast loader by default.
+      const preferred = file.name.toLowerCase().endsWith('.obj')
+        ? paths.find((p) => p.toLowerCase().endsWith('.glb')) ?? paths[0]
+        : paths[0];
+      onChange({ ...artifact, model: preferred });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploadingSlot(null);
+      if (objRef.current) objRef.current.value = '';
+    }
   };
 
-  const handleTexture = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    uploadSlot(
-      'texture',
-      file,
-      (f) => {
-        const n = f.name.toLowerCase();
-        return n.endsWith('.jpg') || n.endsWith('.jpeg') ? null : '必須是 .jpg 貼圖檔案';
-      },
-      (path) => ({ ...artifact, texture: path }),
-      textureRef,
-    );
+  const handleTextures = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const list = e.target.files;
+    if (!list || list.length === 0) return;
+    const selected = Array.from(list);
+    for (const f of selected) {
+      const n = f.name.toLowerCase();
+      if (!n.endsWith('.jpg') && !n.endsWith('.jpeg')) {
+        setUploadError(`必須是 .jpg 貼圖檔案：${f.name}`);
+        if (textureRef.current) textureRef.current.value = '';
+        return;
+      }
+    }
+    setUploadingSlot('texture');
+    setUploadError(null);
+    try {
+      const paths = await uploadFiles(selected, artifact.id);
+      // Field-write rule (spec §1):
+      //   No MTL on disk → set `texture` to first JPEG (legacy uniform-override path).
+      //   MTL on disk     → leave `texture` empty (rebuilt GLB carries textures).
+      const mtlPresent = hasMtl(files) || Boolean(artifact.mtl);
+      if (mtlPresent) {
+        onChange({ ...artifact, texture: undefined });
+        await maybeRebuild();
+      } else {
+        onChange({ ...artifact, texture: paths[0] });
+      }
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploadingSlot(null);
+      if (textureRef.current) textureRef.current.value = '';
+    }
   };
 
-  const handleMtl = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMtl = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    uploadSlot(
-      'mtl',
-      file,
-      (f) => (f.name.toLowerCase().endsWith('.mtl') ? null : '必須是 .mtl 檔案'),
-      (path) => ({ ...artifact, mtl: path }),
-      mtlRef,
-    );
+    if (!file.name.toLowerCase().endsWith('.mtl')) {
+      setUploadError('必須是 .mtl 檔案');
+      if (mtlRef.current) mtlRef.current.value = '';
+      return;
+    }
+    setUploadingSlot('mtl');
+    setUploadError(null);
+    try {
+      const paths = await uploadFiles([file], artifact.id);
+      // Clear `texture` on the same change — see spec §4: the kiosk's GLTF
+      // uniform-override would otherwise overwrite the new MTL-driven
+      // textures (Canvas3D.tsx:274-281).
+      onChange({ ...artifact, mtl: paths[0], texture: undefined });
+      await maybeRebuild();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploadingSlot(null);
+      if (mtlRef.current) mtlRef.current.value = '';
+    }
   };
 
   return (
@@ -170,15 +234,22 @@ export default function ArtifactForm({ artifact, onChange, onDelete }: Props) {
           />
           {format === 'obj' && (
             <>
-              <UploadRow
-                label="貼圖 JPG（若無 MTL 則必須）"
-                accept=".jpg,.jpeg,image/jpeg"
+              <TextureMultiRow
                 inputRef={textureRef}
-                onChange={handleTexture}
+                onChange={handleTextures}
                 uploading={uploadingSlot === 'texture'}
-                currentPath={artifact.texture}
-                missing={isMissing(artifact.texture, files)}
-                onRemove={() => removeFile(artifact.texture, () => ({ ...artifact, texture: undefined }))}
+                rebuilding={rebuilding}
+                jpegs={listJpegs(files)}
+                legacyTexture={artifact.texture}
+                legacyMissing={isMissing(artifact.texture, files)}
+                mtlRefs={mtlRefs}
+                onRemoveJpeg={async (filename) => {
+                  await removeFile(`${artifact.id}/${filename}`, () => artifact);
+                  await maybeRebuild();
+                }}
+                onRemoveLegacy={() =>
+                  removeFile(artifact.texture, () => ({ ...artifact, texture: undefined }))
+                }
               />
               <UploadRow
                 label="MTL 材質（可選）"

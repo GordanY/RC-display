@@ -65,3 +65,21 @@ export async function deleteFile(relPath: string): Promise<void> {
     throw new Error(`DELETE /files failed: ${res.status} ${txt}`);
   }
 }
+
+// Triggers a server-side OBJ→GLB rebuild for a model whose sidecar files
+// (MTL or JPEG textures) just changed on disk. The server overwrites the
+// .glb only on success; on failure the previous GLB stays intact and the
+// error message is surfaced for the admin UI to display.
+export async function rebuildGlb(objPath: string): Promise<string> {
+  const res = await fetch(`${BASE}/rebuild-glb`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ objPath }),
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`POST /rebuild-glb failed: ${res.status} ${txt}`);
+  }
+  const json = (await res.json()) as { glbPath: string };
+  return json.glbPath;
+}

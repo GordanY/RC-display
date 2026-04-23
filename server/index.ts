@@ -179,6 +179,41 @@ app.post('/api/upload', upload.array('files'), async (req, res) => {
   res.json({ paths: [...uploaded, ...converted] });
 });
 
+// Re-runs obj2gltf against an OBJ already on disk. Triggered by the admin UI
+// after MTL/JPEG slots change so the GLB picks up the new sidecar files.
+// Overwrites the existing GLB on success only — failure leaves the previous
+// GLB intact, mirroring the upload-route behaviour.
+app.post('/api/rebuild-glb', async (req, res) => {
+  const objPath = (req.body as Record<string, string>).objPath;
+  const resolved = safeResolve(objPath);
+  if (!resolved || resolved === ARTIFACTS_DIR) {
+    res.status(400).json({ error: 'Invalid objPath' });
+    return;
+  }
+  if (!resolved.toLowerCase().endsWith('.obj')) {
+    res.status(400).json({ error: 'objPath must end with .obj' });
+    return;
+  }
+  if (!fs.existsSync(resolved)) {
+    res.status(404).json({ error: 'OBJ not found on disk' });
+    return;
+  }
+
+  const glbAbs = resolved.replace(/\.obj$/i, '.glb');
+  try {
+    const glb = await convertObjToGlb(resolved, { binary: true });
+    await fs.promises.writeFile(glbAbs, glb);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({
+      error: `obj2gltf failed on ${path.basename(resolved)}: ${msg}`,
+    });
+    return;
+  }
+
+  res.json({ glbPath: path.relative(ARTIFACTS_DIR, glbAbs) });
+});
+
 // List filenames in an artifacts subdirectory. Admin polls this per-form
 // every ~1s so "formats present on disk" state reflects manual filesystem
 // edits (e.g. file deleted via OS Finder). Missing dir → empty list so a
