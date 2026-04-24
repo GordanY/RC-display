@@ -50,7 +50,7 @@ export default function KioskLayout() {
     setCreationId(null);
   };
   const handleCreation = (id: string) => {
-    setCreationId((prev) => (prev === id ? null : id));
+    setCreationId(id);
   };
 
   const source = creation?.model ? creation : artifact;
