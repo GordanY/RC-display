@@ -27,7 +27,10 @@ export function TextureMultiRow({
 }: TextureMultiRowProps) {
   const refFiles = mtlRefs.map((r) => r.file);
   const missingFromDisk = refFiles.filter((f) => !jpegs.includes(f) && !f.includes('/'));
-  const unreferenced = jpegs.filter((j) => !refFiles.includes(j));
+  // Only flag "未被 MTL 引用" when an MTL actually exists; otherwise every
+  // JPEG appears unreferenced and the warning is noise (the kiosk uses the
+  // legacy uniform-override path in that case).
+  const unreferenced = mtlRefs.length === 0 ? [] : jpegs.filter((j) => !refFiles.includes(j));
   const subpathRefs = mtlRefs.filter((r) => r.hasSubpath);
 
   return (
