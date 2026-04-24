@@ -40,10 +40,10 @@ export function isMissing(path: string | undefined, files: string[]): boolean {
   return !files.includes(basename(path));
 }
 
-// Returns just the .jpg/.jpeg filenames from a directory listing, sorted
-// for stable display order.
-export function listJpegs(files: string[]): string[] {
-  return files.filter((f) => /\.jpe?g$/i.test(f)).sort();
+// Returns the texture filenames (.jpg/.jpeg/.png) from a directory listing,
+// sorted for stable display order.
+export function listTextures(files: string[]): string[] {
+  return files.filter((f) => /\.(jpe?g|png)$/i.test(f)).sort();
 }
 
 export function hasMtl(files: string[]): boolean {

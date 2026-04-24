@@ -5,11 +5,11 @@ export interface TextureMultiRowProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   uploading: boolean;
   rebuilding: boolean;
-  jpegs: string[];
+  textures: string[];
   legacyTexture?: string;
   legacyMissing: boolean;
   mtlRefs: MtlTextureRef[];
-  onRemoveJpeg: (filename: string) => void;
+  onRemoveTexture: (filename: string) => void;
   onRemoveLegacy: () => void;
 }
 
@@ -18,29 +18,29 @@ export function TextureMultiRow({
   onChange,
   uploading,
   rebuilding,
-  jpegs,
+  textures,
   legacyTexture,
   legacyMissing,
   mtlRefs,
-  onRemoveJpeg,
+  onRemoveTexture,
   onRemoveLegacy,
 }: TextureMultiRowProps) {
   const refFiles = mtlRefs.map((r) => r.file);
-  const missingFromDisk = refFiles.filter((f) => !jpegs.includes(f) && !f.includes('/'));
+  const missingFromDisk = refFiles.filter((f) => !textures.includes(f) && !f.includes('/'));
   // Only flag "未被 MTL 引用" when an MTL actually exists; otherwise every
-  // JPEG appears unreferenced and the warning is noise (the kiosk uses the
-  // legacy uniform-override path in that case).
-  const unreferenced = mtlRefs.length === 0 ? [] : jpegs.filter((j) => !refFiles.includes(j));
+  // texture appears unreferenced and the warning is noise (the kiosk uses
+  // the legacy uniform-override path in that case).
+  const unreferenced = mtlRefs.length === 0 ? [] : textures.filter((j) => !refFiles.includes(j));
   const subpathRefs = mtlRefs.filter((r) => r.hasSubpath);
 
   return (
     <div className="file-row" style={{ alignItems: 'flex-start', flexDirection: 'column', gap: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 13, color: 'var(--muted)', minWidth: 180 }}>貼圖 JPG（可多選）</span>
+        <span style={{ fontSize: 13, color: 'var(--muted)', minWidth: 180 }}>貼圖 JPG/PNG（可多選）</span>
         <input
           ref={inputRef}
           type="file"
-          accept=".jpg,.jpeg,image/jpeg"
+          accept=".jpg,.jpeg,.png,image/jpeg,image/png"
           multiple
           onChange={onChange}
           style={{ color: 'var(--muted)', fontSize: 13 }}
@@ -64,13 +64,13 @@ export function TextureMultiRow({
         </div>
       )}
 
-      {jpegs.map((j) => (
+      {textures.map((j) => (
         <div key={j} className="file-path">
           {j}
           <button
             type="button"
             className="file-remove"
-            onClick={() => onRemoveJpeg(j)}
+            onClick={() => onRemoveTexture(j)}
             aria-label="移除檔案"
             title="移除檔案"
           >

@@ -7,7 +7,7 @@ import {
   hasFormat,
   hasMtl,
   isMissing,
-  listJpegs,
+  listTextures,
   pickSibling,
   type ModelFormat,
 } from './modelFormat';
@@ -134,9 +134,8 @@ export default function ArtifactForm({ artifact, onChange, onDelete }: Props) {
     if (!list || list.length === 0) return;
     const selected = Array.from(list);
     for (const f of selected) {
-      const n = f.name.toLowerCase();
-      if (!n.endsWith('.jpg') && !n.endsWith('.jpeg')) {
-        setUploadError(`必須是 .jpg 貼圖檔案：${f.name}`);
+      if (!/\.(jpe?g|png)$/i.test(f.name)) {
+        setUploadError(`必須是 .jpg 或 .png 貼圖檔案：${f.name}`);
         if (textureRef.current) textureRef.current.value = '';
         return;
       }
@@ -239,11 +238,11 @@ export default function ArtifactForm({ artifact, onChange, onDelete }: Props) {
                 onChange={handleTextures}
                 uploading={uploadingSlot === 'texture'}
                 rebuilding={rebuilding}
-                jpegs={listJpegs(files)}
+                textures={listTextures(files)}
                 legacyTexture={artifact.texture}
                 legacyMissing={isMissing(artifact.texture, files)}
                 mtlRefs={mtlRefs}
-                onRemoveJpeg={async (filename) => {
+                onRemoveTexture={async (filename) => {
                   await removeFile(`${artifact.id}/${filename}`, () => artifact);
                   await maybeRebuild();
                 }}
