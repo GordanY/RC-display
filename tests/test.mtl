@@ -1,0 +1,22 @@
+# Blender 5.1.1 MTL File: 'None'
+# www.blender.org
+
+newmtl tripo_mat_b1f35695-76ab-443b-96cb-f01784e61d66.001
+Ns 10.000005
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd S08_horse_basecolor.JPEG
+
+newmtl tripo_mat_dc9559e0-862d-417a-a27e-db80f3b839f6.002
+Ns 10.000005
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd S08_floor_basecolor.JPEG
