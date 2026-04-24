@@ -6,6 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 // @ts-expect-error obj2gltf ships no type declarations; minimal shim below.
 import obj2gltf from 'obj2gltf';
+import { normalizeMtlText } from '../src/admin/mtlParse';
 
 type Obj2GltfFn = (
   objPath: string,
@@ -104,6 +105,36 @@ function atomicWriteJson(filePath: string, data: unknown): void {
   fs.renameSync(tmp, filePath);
 }
 
+// Rewrites every .mtl in `dirAbs` so map_Kd values become bare basenames.
+// obj2gltf resolves textures relative to the MTL's directory, so a
+// `map_Kd S08_horse/foo.JPEG` reference fails when admin-uploaded JPEGs
+// land flat alongside the MTL. The original is preserved as `<name>.original`
+// (only on the first rewrite) so an operator can recover the source paths.
+async function normalizeMtlsInDir(dirAbs: string): Promise<string[]> {
+  const changed: string[] = [];
+  let entries: string[];
+  try {
+    entries = await fs.promises.readdir(dirAbs);
+  } catch {
+    return changed;
+  }
+  for (const name of entries) {
+    if (!name.toLowerCase().endsWith('.mtl')) continue;
+    const mtlPath = path.join(dirAbs, name);
+    const stat = await fs.promises.stat(mtlPath).catch(() => null);
+    if (!stat?.isFile()) continue;
+    const original = await fs.promises.readFile(mtlPath, 'utf-8');
+    const { text, changed: didChange } = normalizeMtlText(original);
+    if (!didChange) continue;
+    const backup = `${mtlPath}.original`;
+    try { await fs.promises.access(backup); }
+    catch { await fs.promises.writeFile(backup, original); }
+    await fs.promises.writeFile(mtlPath, text);
+    changed.push(name);
+  }
+  return changed;
+}
+
 app.get('/api/data', (_req, res) => {
   const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8')) as ExhibitData;
   res.json(data);
@@ -147,6 +178,11 @@ app.post('/api/upload', upload.array('files'), async (req, res) => {
     res.status(400).json({ error: 'No files uploaded' });
     return;
   }
+
+  // Normalize any MTL paths first so obj2gltf finds flat-uploaded JPEGs.
+  // Runs even when no .obj is in this batch (e.g. MTL-only uploads) so the
+  // client's hasSubpath warning clears immediately on the next file-list poll.
+  await normalizeMtlsInDir(path.dirname(files[0].path));
 
   // Synchronously convert any uploaded .obj to a .glb sibling. Keeps OBJ on
   // disk so the admin can roll back to the OBJ path in data.json without
@@ -198,6 +234,8 @@ app.post('/api/rebuild-glb', async (req, res) => {
     res.status(404).json({ error: 'OBJ not found on disk' });
     return;
   }
+
+  await normalizeMtlsInDir(path.dirname(resolved));
 
   const glbAbs = resolved.replace(/\.obj$/i, '.glb');
   try {

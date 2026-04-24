@@ -27,6 +27,7 @@ if os.name == "nt":
 import argparse
 import json
 import logging
+import re
 import shutil
 import webbrowser
 import threading
@@ -120,6 +121,62 @@ def pause_and_exit(code=1):
     print()
     input("Press Enter to exit...")
     sys.exit(code)
+
+
+# ---------------------------------------------------------------------------
+# MTL path normalization — mirrors src/admin/mtlParse.ts:normalizeMtlText.
+# Rewrites map_Kd values to bare basenames so obj2gltf finds JPEGs that the
+# admin uploaded flat into the artifact directory. Preserves option flags
+# (-clamp, -mm, -s …) by treating only the trailing token as the filename.
+# Saves the original to <name>.mtl.original on the first rewrite.
+# ---------------------------------------------------------------------------
+MAP_KD_LINE_RE = re.compile(
+    r"^([ \t]*map_Kd\s+(?:.*\s)?)(\S+)([ \t]*)$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def normalize_mtl_text(text):
+    """Returns (new_text, changed)."""
+    changed = [False]
+
+    def _sub(match):
+        prefix, file, trail = match.group(1), match.group(2), match.group(3)
+        base = file.rsplit("/", 1)[-1] if "/" in file else file
+        if base != file:
+            changed[0] = True
+        return prefix + base + trail
+
+    new_text = MAP_KD_LINE_RE.sub(_sub, text)
+    return new_text, changed[0]
+
+
+def normalize_mtls_in_dir(dir_abs):
+    """Normalize every .mtl in dir_abs in place. Returns list of changed names."""
+    changed_names = []
+    try:
+        entries = os.listdir(dir_abs)
+    except OSError:
+        return changed_names
+    for name in entries:
+        if not name.lower().endswith(".mtl"):
+            continue
+        mtl_path = os.path.join(dir_abs, name)
+        if not os.path.isfile(mtl_path):
+            continue
+        with open(mtl_path, "r", encoding="utf-8") as f:
+            original = f.read()
+        new_text, did_change = normalize_mtl_text(original)
+        if not did_change:
+            continue
+        backup = mtl_path + ".original"
+        if not os.path.exists(backup):
+            with open(backup, "w", encoding="utf-8") as f:
+                f.write(original)
+        with open(mtl_path, "w", encoding="utf-8") as f:
+            f.write(new_text)
+        changed_names.append(name)
+    return changed_names
 
 
 # ---------------------------------------------------------------------------
@@ -582,6 +639,10 @@ def create_app():
             f.save(str(save_path))
             saved_rel.append(str(save_path.relative_to(ARTIFACTS_DIR)))
 
+        # Normalize any MTL paths first so obj2gltf finds flat-uploaded JPEGs.
+        # Runs even when no .obj is in this batch (e.g. MTL-only uploads).
+        normalize_mtls_in_dir(str(dest_dir))
+
         # OBJ→GLB conversion. Mirrors server/index.ts: fail loud on error so
         # the admin UI surfaces it (a silently-broken GLB is worse for the
         # kiosk than an upload error the operator can react to).
@@ -646,6 +707,8 @@ def create_app():
             return jsonify({"error": "Invalid objPath"}), 400
         if not resolved.exists():
             return jsonify({"error": "OBJ not found on disk"}), 404
+
+        normalize_mtls_in_dir(str(resolved.parent))
 
         glb_path = resolved.with_suffix(".glb")
         obj_tool = BASE_DIR / "tools" / "obj_to_glb.mjs"

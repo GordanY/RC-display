@@ -87,8 +87,8 @@ export function TextureMultiRow({
         </span>
       ))}
       {subpathRefs.map((r) => (
-        <span key={`sub-${r.file}`} style={{ color: 'var(--danger)', fontSize: 12 }}>
-          MTL 使用子目錄路徑（{r.file}），目前不支援
+        <span key={`sub-${r.file}`} style={{ color: 'var(--amber)', fontSize: 12 }}>
+          MTL 使用子目錄路徑（{r.file}），重新封裝模型時將自動扁平化
         </span>
       ))}
     </div>

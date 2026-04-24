@@ -29,3 +29,21 @@ export function parseMtlTextureRefs(mtlText: string): MtlTextureRef[] {
   }
   return out;
 }
+
+// Rewrites map_Kd values to bare basenames so obj2gltf finds textures uploaded
+// flat into the artifact directory. Preserves any leading option flags
+// (-clamp, -mm, -s …) by treating only the trailing whitespace-separated
+// token as the filename. Returns the new text plus whether any change was
+// made; callers use `changed` to decide whether to back up the original.
+export function normalizeMtlText(text: string): { text: string; changed: boolean } {
+  let changed = false;
+  const next = text.replace(
+    /^([ \t]*map_Kd\s+(?:.*\s)?)(\S+)([ \t]*)$/gim,
+    (_full, prefix: string, file: string, trail: string) => {
+      const base = file.includes('/') ? file.slice(file.lastIndexOf('/') + 1) : file;
+      if (base !== file) changed = true;
+      return prefix + base + trail;
+    },
+  );
+  return { text: next, changed };
+}
