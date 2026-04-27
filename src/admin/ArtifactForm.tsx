@@ -202,6 +202,19 @@ export default function ArtifactForm({ artifact, onChange, onDelete }: Props) {
       </div>
 
       <div style={{ marginBottom: 16 }}>
+        <div className="admin-label">展示狀態</div>
+        <button
+          type="button"
+          className={`admin-visibility-toggle${artifact.visible === false ? ' off' : ''}`}
+          onClick={() =>
+            onChange({ ...artifact, visible: artifact.visible === false ? true : false })
+          }
+        >
+          {artifact.visible === false ? '已隱藏（不顯示於展示）' : '顯示於展示'}
+        </button>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
         <div className="admin-label">介紹</div>
         <textarea
           className="admin-textarea"

@@ -19,6 +19,8 @@ export interface Artifact {
   texture?: string;
   mtl?: string;
   creations: Creation[];
+  // Absent or true => shown on kiosk; false => hidden but kept on disk.
+  visible?: boolean;
 }
 
 export interface ExhibitData {

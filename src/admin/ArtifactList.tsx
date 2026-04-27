@@ -67,8 +67,9 @@ export default function ArtifactList({ data, onChange }: Props) {
           {data.artifacts.map((a) => (
             <button
               key={a.id}
-              className={`tab${a.id === selectedId ? ' active' : ''}`}
+              className={`tab${a.id === selectedId ? ' active' : ''}${a.visible === false ? ' hidden' : ''}`}
               onClick={() => setSelectedId(a.id)}
+              title={a.visible === false ? '此藏品已隱藏，不顯示於展示' : undefined}
             >
               {a.title || '未命名'}
             </button>

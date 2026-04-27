@@ -473,6 +473,29 @@ html, body, #root {
 .admin-radio-group input[type="radio"] { display: none; }
 .admin-radio-group label.active { color: var(--text); border-color: var(--text); background: var(--surface-2); }
 
+.admin-visibility-toggle {
+  background: var(--surface-2);
+  border: 1px solid var(--text);
+  color: var(--text);
+  font-family: var(--font-cn);
+  font-size: 16px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all 150ms var(--ease);
+}
+.admin-visibility-toggle.off {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--muted);
+}
+.admin-visibility-toggle:hover { border-color: var(--text); color: var(--text); }
+
+.admin-tabs .tab.hidden { opacity: 0.45; }
+.admin-tabs .tab.hidden::before {
+  content: '◌ ';
+  color: var(--muted);
+}
+
 .file-row {
   display: flex;
   align-items: center;

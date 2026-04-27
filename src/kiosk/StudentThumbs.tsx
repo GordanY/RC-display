@@ -20,7 +20,9 @@ export default function StudentThumbs({ creations, activeId, onSelect }: Props) 
               <img src={`/artifacts/${c.preview}`} alt={c.name} />
             ) : null}
           </div>
-          <span className="thumb-name">{c.name || '—'}</span>
+          <span className="thumb-name">
+            {(c.displayMode === 'school-name' ? c.school : c.name) || '—'}
+          </span>
         </button>
       ))}
     </div>

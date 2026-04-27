@@ -12,36 +12,42 @@ export default function KioskLayout() {
   const [creationId, setCreationId] = useState<string | null>(null);
 
   const resetToDefault = useCallback(() => {
-    if (data && data.artifacts.length > 0) {
-      setArtifactId(data.artifacts[0].id);
+    const first = data?.artifacts.find((a) => a.visible !== false);
+    if (first) {
+      setArtifactId(first.id);
       setCreationId(null);
     }
   }, [data]);
 
   useIdleTimeout(resetToDefault, 60_000);
 
+  const visibleArtifacts = data?.artifacts.filter((a) => a.visible !== false) ?? [];
+
   useEffect(() => {
-    if (data && !artifactId && data.artifacts.length > 0) {
-      setArtifactId(data.artifacts[0].id);
+    const list = data?.artifacts.filter((a) => a.visible !== false) ?? [];
+    if (list.length === 0) return;
+    if (!list.some((a) => a.id === artifactId)) {
+      setArtifactId(list[0].id);
+      setCreationId(null);
     }
-  }, [data, artifactId]);
+  }, [data?.artifacts, artifactId]);
 
   if (loading) return <div className="kiosk-state">Loading…</div>;
   if (error || !data) return <div className="kiosk-state">Error: {error ?? 'unknown'}</div>;
 
-  if (data.artifacts.length === 0) {
+  if (visibleArtifacts.length === 0) {
     return (
       <KioskFrame>
         <h1 className="exhibit-title">{data.exhibitTitle || '展覽'}</h1>
         <div className="kiosk-state" style={{ minHeight: 0, marginTop: 120 }}>
-          尚未新增藏品
+          {data.artifacts.length === 0 ? '尚未新增藏品' : '目前沒有展示中的藏品'}
         </div>
       </KioskFrame>
     );
   }
 
   const artifact: Artifact =
-    data.artifacts.find((a) => a.id === artifactId) ?? data.artifacts[0];
+    visibleArtifacts.find((a) => a.id === artifactId) ?? visibleArtifacts[0];
   const creation: Creation | null =
     creationId !== null ? artifact.creations.find((c) => c.id === creationId) ?? null : null;
 
@@ -64,7 +70,7 @@ export default function KioskLayout() {
   return (
     <KioskFrame>
       <h1 className="exhibit-title">{data.exhibitTitle || '展覽'}</h1>
-      <ArtifactTabs artifacts={data.artifacts} activeId={artifact.id} onSelect={handleArtifact} />
+      <ArtifactTabs artifacts={visibleArtifacts} activeId={artifact.id} onSelect={handleArtifact} />
       <Canvas3D
         modelPath={modelPath}
         texturePath={texturePath}

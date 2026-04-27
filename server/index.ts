@@ -51,6 +51,7 @@ interface Artifact {
   texture?: string;
   mtl?: string;
   creations: Creation[];
+  visible?: boolean;
 }
 
 interface ExhibitData {
@@ -66,6 +67,10 @@ function isOptStr(v: unknown): v is string | undefined {
   return v === undefined || typeof v === 'string';
 }
 
+function isOptBool(v: unknown): v is boolean | undefined {
+  return v === undefined || typeof v === 'boolean';
+}
+
 function validateExhibitData(body: unknown): body is ExhibitData {
   if (!body || typeof body !== 'object') return false;
   const d = body as Record<string, unknown>;
@@ -76,6 +81,7 @@ function validateExhibitData(body: unknown): body is ExhibitData {
     const art = a as Record<string, unknown>;
     if (!isStr(art.id) || !isStr(art.title) || !isStr(art.description) || !isStr(art.model)) return false;
     if (!isOptStr(art.texture) || !isOptStr(art.mtl)) return false;
+    if (!isOptBool(art.visible)) return false;
     if (!Array.isArray(art.creations)) return false;
     for (const c of art.creations) {
       if (!c || typeof c !== 'object') return false;
@@ -87,6 +93,24 @@ function validateExhibitData(body: unknown): body is ExhibitData {
     }
   }
   return true;
+}
+
+// Busboy (inside multer) decodes the multipart `filename` parameter as latin1
+// by default, which mangles UTF-8 byte sequences from modern browsers — e.g.
+// `地型` arrives as `å°å`. We re-decode: if every char fits in latin1, the
+// string is likely latin1-framed UTF-8 bytes and we round-trip it; if any
+// codepoint is >0xFF it was already decoded (RFC 5987 filename*) and we leave
+// it alone. A fatal TextDecoder catch means genuine latin1 names fall through
+// unchanged instead of being corrupted into U+FFFD replacement chars.
+function decodeOriginalName(name: string): string {
+  for (let i = 0; i < name.length; i++) {
+    if (name.charCodeAt(i) > 0xff) return name;
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(name, 'latin1'));
+  } catch {
+    return name;
+  }
 }
 
 function safeResolve(relative: string): string | null {
@@ -161,6 +185,10 @@ const storage = multer.diskStorage({
     cb(null, resolved);
   },
   filename: (_req, file, cb) => {
+    // Mutate so downstream code (the .obj check below, error messages, and
+    // `f.path`) sees the corrected Unicode name instead of the latin1 mojibake
+    // busboy produced.
+    file.originalname = decodeOriginalName(file.originalname);
     const base = path.basename(file.originalname);
     if (base !== file.originalname || base.includes('..')) {
       cb(new Error('Invalid filename'), '');
