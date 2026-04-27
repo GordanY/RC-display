@@ -244,19 +244,6 @@ html, body, #root {
   gap: 16px;
   overflow-x: auto;
   scrollbar-width: none;
-  position: relative;
-}
-.thumbs::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 80px;
-  background: linear-gradient(to right, transparent 0%, var(--bg) 100%);
-  opacity: 0.6;
-  pointer-events: none;
-  z-index: 1;
 }
 .thumb {
   flex-shrink: 0;
@@ -269,8 +256,8 @@ html, body, #root {
   padding: 0;
 }
 .thumb-tile {
-  width: 168px;
-  height: 128px;
+  width: 202px;
+  height: 154px;
   background: var(--surface);
   border: 1px solid var(--border);
   overflow: hidden;
